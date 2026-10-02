@@ -1,39 +1,36 @@
 # Clauisc
 
 **Apple Music, live in your Claude Code prompt.** Clauisc is a Claude Code
-plugin that shows what's playing on the right side of the band above your
-input line: a pixel-art album cover, the track, and a boombox whose notes
-flash to the beat.
+plugin that sits right-aligned just above your input line: the album cover,
+the track, a progress ring, and music notes rising to the beat, framed like
+a little boombox.
 
 ```
-                                                                .
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                              /|
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Pink + White                     .         | o'
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Frank Ocean                      |        o'
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Blonde                           |    bla bla bla
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ▶ 1:01 / 3:04            ________|_   /'
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ━━━━━━━━━━──────────    |==+===== O|
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                          |(%)[oo](%)| VK
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                          `----------'
+ _________________________________________
+| ▀▀▀▀▀▀ Pink + White               ⢀⡤⠶⢤⡀ |   ♪
+| ▀▀▀▀▀▀ Frank Ocean                ⢾   ⡷ | ♫
+| ▀▀▀▀▀▀                            ⠈⠓⠶⠚⠁ |    ♪
+`-----------------------------------------'
 ```
 
-> **Status: early.** Built and tested against a mocked Music app; first runs
-> on real Macs are happening now. Reports and screenshots are welcome in
+> **Status: early.** Tested against a mocked Music app and on a first real
+> Mac. Reports and screenshots are welcome in
 > [Issues](https://github.com/mireabot/Clauisc/issues).
 
 ## Features
 
-- **Pixel cover**: the current track's artwork in true color, 16×16 pixels
-  in 16×8 terminal cells. `/nowplaying ascii` switches to colored ASCII art.
-- **Track info**: title, artist, album, play/pause, time and a progress bar,
-  refreshed every 2 seconds.
-- **Boombox**: VK's ASCII boombox (see [Credits](#credits)) plays along; its
-  three notes each take a random color on every beat, following the track's
-  BPM when Apple Music has one and a loose random groove otherwise, and rest
-  in gray while paused. It shows when the band has room: about 65 columns and
-  9 rows.
-- **Fits the terminal**: the boombox steps aside first, then the cover
-  shrinks to 8×4, then the band becomes a single line.
+- **Cover**: the current track's artwork in true color, 6×6 pixels in a 6×3
+  cell square. `/nowplaying ascii` switches to colored ASCII.
+- **Title and artist**, stacked and left-aligned beside the cover.
+- **Progress ring**: a 9-dot circle in braille that fills clockwise from the
+  top as the track plays; accent-colored while playing, gray while paused.
+- **Rising notes**: on every beat a ♪ or ♫ in a random color starts at the
+  bottom of its own 5×3 frame and floats up a row per beat. The beat follows
+  the track's BPM when Apple Music has one, a loose random groove otherwise.
+  Paused, the last notes drift away.
+- **Two-way sync**: play, pause, skip or scrub in Music and the band follows
+  within about 2 seconds.
+- **Fits the terminal**: 5 rows tall; in a small window it becomes one line.
 - **No dependencies**: only macOS's built-in `osascript`.
 
 ## Requirements
@@ -82,7 +79,7 @@ Play something in Music and the band appears above your prompt.
 | `/nowplaying` | Hide or show the band |
 | `/nowplaying ascii` | Draw the cover as colored ASCII |
 | `/nowplaying blocks` | Draw the cover as half-block pixels (default) |
-| `/nowplaying status` | Report what Clauisc sees: osascript's result, the track, artwork, and whether the band was drawn |
+| `/nowplaying status` | Report what Clauisc sees: osascript's result, the track, timers, artwork, and whether the band was drawn |
 
 ## Troubleshooting
 
@@ -92,63 +89,94 @@ found.
 - **The band says macOS is blocking access to Music**: open System Settings →
   Privacy & Security → Automation, turn on **Music** under your terminal app,
   and restart the terminal.
-- **No band and no message**: nothing is playing, or Music isn't open. Start a
-  track; the band appears within 2 seconds.
+- **No band and no message**: Music isn't open, or nothing is loaded in it.
+  Start a track; the band appears within 2 seconds.
+- **The band doesn't follow play/pause**: check `/nowplaying status`. `timer
+  ticks` should climb by about one every 2 seconds; if it doesn't, `backup
+  polls` shows the beat timer covering for it.
 - **`band drawn: 0 times`**: Claude Code isn't loading the plugin. Check
   `claude --version`, run `claude plugin validate ~/Clauisc/plugins/clauisc`,
   and start with `claude --debug --plugin-dir ~/Clauisc/plugins/clauisc` to
   see why.
 - **Check Music directly**:
   `osascript -e 'tell application "Music" to get name of current track'`
-- **Claude Code desktop app**: only the terminal draws the cover and the
-  boombox; other surfaces show a one-line band.
+- **Small window or the desktop app**: the band needs 5 rows and about 50
+  columns, and only the terminal draws the cover, ring and notes; otherwise
+  it's one line of text.
 
 ## How it works
 
 1. **Track**: every 2 seconds an AppleScript asks Music for the player state,
-   title, artist, album, BPM, position and duration.
+   title, artist, album, BPM, position and duration. The beat timer doubles
+   as a backup: if the 2-second timer goes quiet, it asks Music itself.
 2. **Artwork**: when the track changes, AppleScript writes the artwork's raw
-   bytes to `/tmp/clauisc-art`. A JavaScript for Automation script loads the
-   file with AppKit, scales it to 16×16 with high-quality interpolation, and
-   prints each pixel's RGB.
-3. **Cover**: each terminal cell holds two pixels: an upper half block `▀`
-   whose foreground is the top pixel and background the bottom one. Terminal
-   cells are about twice as tall as wide, so 16×8 cells look square. ASCII
-   mode averages the two pixels and picks a character from `.:-=+*#%@` by
-   brightness, drawn in that color.
-4. **Drawing**: the cover and the boombox are Claude Code `Raster`
-   elements. On each beat the boombox's notes are repainted in place,
-   without redrawing the band.
+   bytes to `/tmp/clauisc-art`. A JavaScript for Automation script loads it
+   with AppKit, scales it to 12×12, and prints each pixel's RGB; Clauisc
+   averages that down to 6×6.
+3. **Cover**: each cell holds two pixels, an upper half block `▀` whose
+   foreground is the top pixel and background the bottom one, so 6×3 cells
+   look square.
+4. **Ring**: braille cells hold 2×4 dots spaced evenly across and down, so a
+   circle drawn in dots stays round. Between polls the ring advances from the
+   time since the last one.
+5. **Drawing**: the cover, ring and notes are Claude Code `Raster` elements.
+   On each beat the ring and notes are repainted in place, without
+   redrawing the band.
 
 ## Customizing
 
-Everything visual lives in
-[`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
+Layout lives in [`plugins/clauisc/hooks/register.tsx`](plugins/clauisc/hooks/register.tsx),
+drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 
 | Name | What it controls |
 | --- | --- |
-| `noteColor` | How each beat's note colors are picked |
-| `BOOMBOX_NOTES` | Which cells of the boombox are notes |
+| `GAP`, `ART_TEXT_GAP` | Columns between components, and between the cover and the text |
+| `TEXT_MAX` | Widest the title/artist column gets |
+| `COVER_COLS`, `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
+| `noteColor` | How each note's color is picked |
+| `riseNotes` | How notes start and rise |
 | `ASCII_RAMP` | ASCII cover characters, dark to bright |
-| `beatMs` | How BPM maps to the beat the notes change on |
+| `beatMs` | How BPM maps to the beat |
 
 ## Development
 
+### Live reload while you edit
+
+Start Claude Code on the plugin folder:
+
 ```sh
-cd plugins/clauisc
-claude plugin validate .
-claude plugin test .
+claude --debug --plugin-dir ~/Clauisc/plugins/clauisc
 ```
 
-The tests mock `osascript`, so they run on any OS. Start Claude Code with
-`--debug` to see why a hook was skipped or a drawing refused.
+An interactive session watches that folder: save a file and the plugin
+reloads in place (its hooks run again, the band redraws), with no restart.
+If a hook throws or a drawing is refused, the transcript shows one dim line
+naming the hook and the reason; `--debug` writes every occurrence to the
+debug log. `/nowplaying status` shows the plugin's own view at any time.
+
+You can also ask Claude in that same session to change the plugin: edits it
+makes reload when its turn ends.
+
+### Checks
+
+```sh
+cd ~/Clauisc/plugins/clauisc
+claude plugin validate .   # what the engine will load, and anything it would refuse
+claude plugin test .       # the tests; they mock osascript, so they run on any OS
+```
+
+Once the plugin has loaded, Claude Code writes its API types to
+`plugins/clauisc/.claude-plugin/types/` (git-ignored), so an editor or
+`tsc -p plugins/clauisc` type-checks it.
+
+### Files
 
 ```
 .claude-plugin/marketplace.json   marketplace manifest
 plugins/clauisc/
   .claude-plugin/plugin.json      plugin manifest
-  hooks/register.tsx              hooks: polling, band drawing, /nowplaying
-  hooks/lib.ts                    AppleScript/JXA, parsing, cover and boombox cells
+  hooks/register.tsx              hooks: polling, beat, band layout, /nowplaying
+  hooks/lib.ts                    AppleScript/JXA, parsing, cover, ring and notes cells
   types/index.d.ts                state contract
   tests/band.test.tsx             tests
 install.sh                        local install for every session
@@ -158,20 +186,17 @@ install.sh                        local install for every session
 
 - Some Apple Music streaming and radio tracks don't expose artwork to
   AppleScript; those get a placeholder cover.
-- Most tracks have no BPM tag, so the notes usually change on a random groove.
-- Terminal only: other Claude Code surfaces show their usual band.
+- Most tracks have no BPM tag, so the notes usually rise on a random groove.
+- The cover, ring and notes are terminal only; other Claude Code surfaces
+  get one line of text.
 
 ## Credits
 
-- **Boombox** ASCII art by **VK**, from
-  [asciiart.website/art/2612](https://asciiart.website/art/2612)
-  (Christopher Johnson's ASCII Art Collection). It is drawn unchanged, with
-  the artist's signature; Clauisc only colors its notes. The art belongs to
-  its artist and is not covered by this repository's MIT license.
+- The frame's shape is inspired by **VK**'s ASCII boombox
+  ([asciiart.website/art/2612](https://asciiart.website/art/2612)).
 - Clauisc is a fan project, not affiliated with or endorsed by Anthropic.
   Claude is a trademark of Anthropic.
 
 ## License
 
-Code: [MIT](LICENSE). Third-party art keeps its own terms; see
-[Credits](#credits).
+[MIT](LICENSE)

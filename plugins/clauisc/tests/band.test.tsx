@@ -1,6 +1,26 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { ART_PX, ART_SCRIPT, INFO_SCRIPT, BOOMBOX_COLS, artCells, beatMs, boomboxCells, explainFailure, noteColor, parseInfo } from '../hooks/lib'
+import {
+  ART_PX,
+  ART_SCRIPT,
+  BAND_ROWS,
+  INFO_SCRIPT,
+  NOTES_COLS,
+  RING_COLS,
+  artCells,
+  beatMs,
+  explainFailure,
+  noteColor,
+  notesCells,
+  parseInfo,
+  riseNotes,
+  ringCells,
+} from '../hooks/lib'
+
+const decode = (cells: string) => {
+  const b = Uint8Array.from(atob(cells), c => c.charCodeAt(0))
+  return new Uint32Array(b.buffer)
+}
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
@@ -18,6 +38,9 @@ describe('clauisc', () => {
     expect(parseInfo('stopped\n')).toBe(null)
     const empty = ['paused', 'missing value', 'missing value', 'missing value', 'missing value', '0', '0', '0'].join(SEP)
     expect(parseInfo(empty)).toBe(null)
+    // Seen on a real Mac: playing, but Music describes no track.
+    const undescribed = 'playing\u001f\u001fmissing value\u001f\u001f\u001f0\u001fmissing value\u001f0'
+    expect(parseInfo(undescribed)).toMatchObject({ isPlaying: true, name: 'Playing in Music', duration: 0 })
     const noAlbum = ['playing', 'X1', 'Song', 'Artist', 'missing value', 'missing value', '3', '200'].join(SEP)
     expect(parseInfo(noAlbum)).toMatchObject({ name: 'Song', album: '', bpm: 0 })
   })
@@ -39,7 +62,7 @@ describe('clauisc', () => {
     expect(beatMs(0, 0)).toBe(380)
   })
 
-  test('draws cover, text and boombox right-aligned on the terminal', async ($, on) => {
+  test('draws the boombox frame with cover, text, ring and notes on the terminal', async ($, on) => {
     const ran = (stdout: string) => ({
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
@@ -64,12 +87,14 @@ describe('clauisc', () => {
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'Frank Ocean' })).toBeDefined()
     expect(await ui.find({ key: 'cover' })).toBeDefined()
-    expect(await ui.find({ key: 'boombox' })).toBeDefined()
-    expect(await ui.find({ key: 'plush' })).toBeUndefined()
+    expect(await ui.find({ key: 'ring' })).toBeDefined()
+    expect(await ui.find({ key: 'notes' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^ _+$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^`-+'$/ })).toBeDefined()
 
-    // The boombox's notes recolor on the beat while playing.
+    // Notes rise and the ring advances on the beat while playing.
     await clock.advance(2000)
-    expect(await ui.find({ key: 'boombox' })).toBeDefined()
+    expect(await ui.find({ key: 'notes' })).toBeDefined()
 
     // /nowplaying hides the band; the engine's own band shows again.
     await $.command.run({ command: 'nowplaying', args: '' } as never)
@@ -107,20 +132,24 @@ describe('clauisc', () => {
     expect(noteColor(2 / 3)).toBe(0x0000ff)
   })
 
-  test("keeps VK's boombox as drawn and colors only its notes", async () => {
-    const decode = (cells: string) => {
-      const b = Uint8Array.from(atob(cells), c => c.charCodeAt(0))
-      return new Uint32Array(b.buffer)
-    }
-    const words = decode(boomboxCells([0x111111, 0x222222, 0x333333]))
-    const row = (r: number) =>
-      String.fromCharCode(...[...Array(BOOMBOX_COLS).keys()].map(c => words[(r * BOOMBOX_COLS + c) * 3]!)).trimEnd()
-    expect(row(4)).toBe('         |    bla bla bla')
-    expect(row(7)).toBe('|(%)[oo](%)| VK')
-    const colored = new Set([...Array(words.length / 3).keys()].map(i => words[i * 3 + 1]))
-    expect([...colored].sort()).toEqual([0x111111, 0x222222, 0x333333, 0x01000000].sort())
-    const resting = decode(boomboxCells(null))
-    expect(resting.includes(0x111111)).toBe(false)
+  test('fills the ring clockwise with the track', async () => {
+    const lit = (cells: string) =>
+      [...decode(cells)].filter((_, i) => i % 3 === 1).filter(c => c === 0xd97757).length
+    expect(decode(ringCells(0, true)).length).toBe(RING_COLS * BAND_ROWS * 3)
+    expect(lit(ringCells(0, true))).toBe(0)
+    expect(lit(ringCells(0.5, true))).toBeGreaterThan(lit(ringCells(0.1, true)))
+    expect(lit(ringCells(1, true))).toBeGreaterThan(lit(ringCells(0.5, true)))
+    expect(lit(ringCells(1, false))).toBe(0)
+  })
+
+  test('notes start at the bottom, rise a row a beat and leave at the top', async () => {
+    let notes = riseNotes([], () => 0.4)
+    expect(notes).toEqual([expect.objectContaining({ row: BAND_ROWS - 1 })])
+    for (let i = 0; i < BAND_ROWS; i++) notes = riseNotes(notes, () => 0.4)
+    expect(notes.length).toBe(BAND_ROWS)
+    expect(notes.map(n => n.row).sort()).toEqual([0, 1, 2])
+    expect(riseNotes(notes, () => 0.4, false).length).toBe(BAND_ROWS - 1)
+    expect(decode(notesCells(notes)).length).toBe(NOTES_COLS * BAND_ROWS * 3)
   })
 
   test('explains a blocked Automation permission instead of hiding', async ($, on) => {
@@ -178,6 +207,37 @@ describe('clauisc', () => {
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
     const report = await $.command.run({ command: 'nowplaying', args: 'status' } as never)
     expect(JSON.stringify(report)).toMatch(/playing \\"Pink \+ White\\"/)
+    await ui.unmount()
+  })
+
+  test('follows pause and resume both ways', async ($, on) => {
+    let state = 'paused'
+    on('process.run', async ($, e) => {
+      const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
+      const stdout = script.includes('raw data') ? 'none\n' : INFO.replace('playing', state)
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const clock = mock.clock(on)
+    on('command.register', async (_, e) => ({ value: { command: e.name } }))
+    on('session.start', async (_, e) => ({ cwd: e.cwd }))
+    on('ui.blit', async () => ({}))
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    await clock.advance(10)
+
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
+    const ringLit = async () => {
+      const ring = await ui.find({ key: 'ring' })
+      return [...decode(String(ring?.props.cells))].filter((_, i) => i % 3 === 1).includes(0xd97757)
+    }
+    expect(await ringLit()).toBe(false)
+
+    state = 'playing'
+    await clock.advance(2500)
+    expect(await ringLit()).toBe(true)
+
+    state = 'paused'
+    await clock.advance(2500)
+    expect(await ringLit()).toBe(false)
     await ui.unmount()
   })
 

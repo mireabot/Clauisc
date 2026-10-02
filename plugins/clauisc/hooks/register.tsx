@@ -5,21 +5,22 @@ import type { Track } from '../types'
 import {
   ART_PX,
   ART_SCRIPT,
+  BAND_ROWS,
+  COVER_COLS,
   INFO_SCRIPT,
+  NOTES_COLS,
+  RING_COLS,
   SAMPLE_SCRIPT,
   artCells,
   beatMs,
-  clock,
   explainFailure,
   isPixels,
+  notesCells,
   parseInfo,
-  BOOMBOX_COLS,
-  BOOMBOX_NOTE_COUNT,
-  BOOMBOX_ROWS,
-  boomboxCells,
-  noteColor,
-  progressBar,
+  riseNotes,
+  ringCells,
 } from './lib'
+import type { FloatingNote } from './lib'
 
 const track = atom({ plugin: 'clauisc', key: 'track' } as const, null)
 const art = atom({ plugin: 'clauisc', key: 'art' } as const, null)
@@ -35,21 +36,26 @@ const OSASCRIPT = '/usr/bin/osascript'
 // which holds osascript until it is answered.
 const INFO_TIMEOUT_MS = 60000
 
-function beatColors(): number[] {
-  return Array.from({ length: BOOMBOX_NOTE_COUNT }, () => noteColor(Math.random()))
-}
+// Spacing in terminal columns (a column is about 8-9 px wide).
+const GAP = 1 // between components
+const ART_TEXT_GAP = 1 // between the cover and the title/artist stack
+const TEXT_MAX = 26
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
   current: null as Track | null,
+  polledAt: 0,
   artFor: null as string | null,
-  tones: beatColors(),
-  hasBoombox: false,
+  notes: [] as FloatingNote[],
   bandId: null as string | null,
+  hasFrame: false,
   isPolling: false,
   poller: null as Timer | null,
   // Diagnostics for /nowplaying status.
   polls: 0,
+  ticks: 0,
+  beats: 0,
+  watchdogPolls: 0,
   renders: 0,
   surface: null as string | null,
   lastExit: null as number | null,
@@ -87,6 +93,7 @@ async function poll($: EngineInterface) {
   live.polls += 1
   try {
     const ran = await $.process.run([OSASCRIPT, '-e', INFO_SCRIPT], { timeoutMs: INFO_TIMEOUT_MS })
+    live.polledAt = await $.clock.now()
     live.lastExit = ran.exitCode
     live.lastStdout = ran.stdout.trim().slice(0, 300)
     live.lastStderr = ran.stderr.trim().slice(0, 300)
@@ -103,6 +110,7 @@ async function poll($: EngineInterface) {
     if (!now) live.artFor = null
   } catch (error) {
     // osascript could not start or ran past the timeout: say so and keep trying.
+    live.polledAt = await $.clock.now()
     live.lastError = String(error).slice(0, 300)
     await update($, problem, () => `Could not run osascript: ${live.lastError}`)
   } finally {
@@ -110,31 +118,49 @@ async function poll($: EngineInterface) {
   }
 }
 
-function statusReport(): string {
+async function statusReport($: EngineInterface): Promise<string> {
   const t = live.current
+  const age = live.polledAt ? Math.round(((await $.clock.now()) - live.polledAt) / 1000) : null
   return [
     'Clauisc status',
-    `- polls: ${live.polls}, last osascript exit: ${live.lastExit ?? 'none yet'}`,
-    `- last error: ${live.lastError ?? 'none'}`,
+    `- polls: ${live.polls} (timer ticks ${live.ticks}, beats ${live.beats}, backup polls ${live.watchdogPolls}), last ${age === null ? 'never' : `${age}s ago`}`,
+    `- last osascript exit: ${live.lastExit ?? 'none yet'}, last error: ${live.lastError ?? 'none'}`,
     `- stdout: ${JSON.stringify(live.lastStdout)}`,
     `- stderr: ${JSON.stringify(live.lastStderr)}`,
-    `- track: ${t ? `${t.isPlaying ? 'playing' : 'paused'} "${t.name}" by ${t.artist || 'unknown'} (bpm ${t.bpm})` : 'none'}`,
+    `- track: ${t ? `${t.isPlaying ? 'playing' : 'paused'} "${t.name}" by ${t.artist || 'unknown'} at ${Math.round(t.position)}/${Math.round(t.duration)}s (bpm ${t.bpm})` : 'none'}`,
     `- artwork: ${live.artStatus}`,
     `- band drawn: ${live.renders} times, surface ${live.surface ?? 'never asked'}`,
   ].join('\n')
 }
 
-function bop($: EngineInterface) {
+/** How far through the track, counting the time since the last poll while playing. */
+function progress(t: Track, now: number): number {
+  if (t.duration <= 0) return 0
+  const since = t.isPlaying && live.polledAt ? (now - live.polledAt) / 1000 : 0
+  return (t.position + since) / t.duration
+}
+
+function beat($: EngineInterface) {
   $.clock.after(beatMs(live.current?.bpm ?? 0, Math.random()), () => {
-    if (live.current?.isPlaying && live.bandId) {
-      live.tones = beatColors()
-      if (live.hasBoombox) {
+    void (async () => {
+      live.beats += 1
+      const now = await $.clock.now()
+      // A backup for the poll timer: if it has gone quiet, ask Music from here.
+      if (!live.isPolling && now - live.polledAt > POLL_MS * 2) {
+        live.watchdogPolls += 1
+        void poll($)
+      }
+      const t = live.current
+      if (t && live.bandId && live.hasFrame) {
+        // Playing, a new note starts each beat; paused, the last ones float away.
+        live.notes = riseNotes(live.notes, Math.random, t.isPlaying)
+        const requestId = live.bandId
+        $.ui.blit({ requestId, key: 'notes', cells: notesCells(live.notes) }).catch(() => undefined)
         $.ui
-          .blit({ requestId: live.bandId, key: 'boombox', cells: boomboxCells(live.tones) })
+          .blit({ requestId, key: 'ring', cells: ringCells(progress(t, now), t.isPlaying) })
           .catch(() => undefined)
       }
-    }
-    bop($)
+    })().finally(() => beat($))
   })
 }
 
@@ -146,8 +172,11 @@ export const register: Register = on => {
     })
     void poll($)
     live.poller?.cancel()
-    live.poller = $.clock.every(POLL_MS, () => void poll($))
-    bop($)
+    live.poller = $.clock.every(POLL_MS, () => {
+      live.ticks += 1
+      void poll($)
+    })
+    beat($)
 
     return next(e)
   })
@@ -156,15 +185,15 @@ export const register: Register = on => {
     const arg = e.args.trim().toLowerCase()
     if (arg === 'status') {
       await poll($)
-      return { text: statusReport() }
+      return { text: await statusReport($) }
     }
     if (arg === 'ascii' || arg === 'blocks') {
       await update($, style, () => arg)
       await update($, isHidden, () => false)
-      return { text: `Now playing: cover drawn as ${arg}.` }
+      return { text: `Clauisc: cover drawn as ${arg}.` }
     }
     const hidden = await update($, isHidden, was => !was)
-    return { text: hidden ? 'Now playing band hidden.' : 'Now playing band shown.' }
+    return { text: hidden ? 'Clauisc band hidden.' : 'Clauisc band shown.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -188,8 +217,14 @@ export const register: Register = on => {
     }
 
     const status = t.isPlaying ? '▶' : '⏸'
-    if (e.surface !== 'terminal') {
-      // Only the terminal draws Rasters: elsewhere the band is one line of text.
+    // The boombox body: top edge, a side each way and the rounded bottom, then the notes.
+    const fixed = 2 + GAP + COVER_COLS + ART_TEXT_GAP + GAP + RING_COLS + GAP + GAP + NOTES_COLS
+    const textCols = Math.min(TEXT_MAX, cols - fixed - 1)
+    const hasFrame = e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10
+    live.hasFrame = hasFrame
+
+    if (!hasFrame) {
+      // Too small, or a surface without Rasters: one line of text.
       const { Box, Text } = $.ui.resolve(e)
       return (
         <Box justifyContent="flex-end" width={cols}>
@@ -202,51 +237,47 @@ export const register: Register = on => {
 
     live.bandId = e.requestId
     const { Box, Text, Raster } = $.ui.resolve(e)
-    const artSize = e.props.maxRows >= 8 && cols >= 70 ? 16 : 8
-    const artRows = artSize / 2
-    // The boombox joins when the band has room for it beside 16 columns of text.
-    const hasBoombox = e.props.maxRows >= BOOMBOX_ROWS && cols >= artSize + BOOMBOX_COLS + 6 + 16
-    live.hasBoombox = hasBoombox
-    const textCols = Math.max(0, Math.min(34, cols - artSize - 4 - (hasBoombox ? BOOMBOX_COLS + 2 : 0)))
-    const time = t.duration > 0 ? `${clock(t.position)} / ${clock(t.duration)}` : clock(t.position)
-
-    if (textCols < 12) {
-      return (
-        <Box justifyContent="flex-end" width={cols}>
-          <Text wrap="truncate-end">
-            {status} {t.name}{t.artist ? ` · ${t.artist}` : ''}
-          </Text>
-        </Box>
-      )
-    }
-
-    const pixels = await read($, art)
-    const cover = artCells(pixels, artSize, await read($, style))
+    const inner = GAP + COVER_COLS + ART_TEXT_GAP + textCols + GAP + RING_COLS + GAP
+    const cover = artCells(await read($, art), COVER_COLS, await read($, style))
+    const ring = ringCells(progress(t, await $.clock.now()), t.isPlaying)
+    const side = (
+      <Box flexDirection="column">
+        {Array.from({ length: BAND_ROWS }, () => (
+          <Text dimColor>|</Text>
+        ))}
+      </Box>
+    )
 
     return (
-      <Box flexDirection="row" justifyContent="flex-end" alignItems="flex-end" width={cols}>
-        <Raster key="cover" columns={artSize} rows={artRows} cells={cover} />
-        <Box flexDirection="column" width={textCols} marginLeft={2} height={artRows} justifyContent="center">
-          <Text bold wrap="truncate-end">{t.name}</Text>
-          {t.artist ? <Text wrap="truncate-end">{t.artist}</Text> : null}
-          {t.album && artRows > 3 ? <Text dimColor wrap="truncate-end">{t.album}</Text> : null}
-          <Text dimColor wrap="truncate-end">
-            {status} {time}
-          </Text>
-          {artRows > 4 ? (
-            <Text color="#d97757">{progressBar(t.position, t.duration, textCols)}</Text>
-          ) : null}
-        </Box>
-        {hasBoombox ? (
-          <Box marginLeft={2}>
-            <Raster
-              key="boombox"
-              columns={BOOMBOX_COLS}
-              rows={BOOMBOX_ROWS}
-              cells={boomboxCells(t.isPlaying ? live.tones : null)}
-            />
+      <Box flexDirection="row" justifyContent="flex-end" alignItems="flex-start" width={cols}>
+        <Box flexDirection="column">
+          <Text dimColor>{` ${'_'.repeat(inner)}`}</Text>
+          <Box flexDirection="row">
+            {side}
+            <Box marginLeft={GAP}>
+              <Raster key="cover" columns={COVER_COLS} rows={BAND_ROWS} cells={cover} />
+            </Box>
+            <Box
+              flexDirection="column"
+              justifyContent="center"
+              alignItems="flex-start"
+              width={textCols}
+              height={BAND_ROWS}
+              marginLeft={ART_TEXT_GAP}
+            >
+              <Text bold wrap="truncate-end">{t.name}</Text>
+              {t.artist ? <Text dimColor wrap="truncate-end">{t.artist}</Text> : null}
+            </Box>
+            <Box marginLeft={GAP} marginRight={GAP}>
+              <Raster key="ring" columns={RING_COLS} rows={BAND_ROWS} cells={ring} />
+            </Box>
+            {side}
           </Box>
-        ) : null}
+          <Text dimColor>{`\`${'-'.repeat(inner)}'`}</Text>
+        </Box>
+        <Box marginLeft={GAP} marginTop={1}>
+          <Raster key="notes" columns={NOTES_COLS} rows={BAND_ROWS} cells={notesCells(live.notes)} />
+        </Box>
       </Box>
     )
   })

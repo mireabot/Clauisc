@@ -1,7 +1,13 @@
 import type { ArtStyle, Track } from '../types'
 
 /** Album art is sampled at ART_PX x ART_PX and drawn two pixels per cell. */
-export const ART_PX = 16
+export const ART_PX = 12
+
+/** Every piece of the band is three rows tall: the cover, the ring and the notes. */
+export const BAND_ROWS = 3
+export const COVER_COLS = 6
+export const RING_COLS = 5
+export const NOTES_COLS = 5
 
 const DEFAULT = 0x01000000
 const HALF_TOP = 0x2580 // ▀
@@ -18,8 +24,12 @@ tell application "Music"
   set stateText to player state as string
   if stateText is "stopped" then return "stopped"
   set {trackKey, trackName, trackArtist, trackAlbum, trackBpm, trackLength} to {"", "", "", "", 0, 0}
+  set {trackKind, trackProblem} to {"", ""}
   try
     set nowTrack to current track
+    try
+      set trackKind to (class of nowTrack) as string
+    end try
     try
       set trackKey to persistent ID of nowTrack
     end try
@@ -38,6 +48,8 @@ tell application "Music"
     try
       set trackLength to duration of nowTrack
     end try
+  on error errorText number errorNumber
+    set trackProblem to (errorNumber as string) & " " & errorText
   end try
   if trackName is "" then
     try
@@ -49,7 +61,7 @@ tell application "Music"
     set playhead to player position
   end try
   set sep to character id 31
-  return stateText & sep & trackKey & sep & trackName & sep & trackArtist & sep & trackAlbum & sep & trackBpm & sep & playhead & sep & trackLength
+  return stateText & sep & trackKey & sep & trackName & sep & trackArtist & sep & trackAlbum & sep & trackBpm & sep & playhead & sep & trackLength & sep & trackKind & sep & trackProblem
 end tell
 `
 
@@ -118,8 +130,21 @@ export function parseInfo(stdout: string): Track | null {
   if (f.length < 8 || (f[0] !== 'playing' && f[0] !== 'paused')) return null
   const name = f[2] ?? ''
   const artist = f[3] ?? ''
-  // Paused with nothing loaded: Music names no track, so there is nothing to show.
-  if (!name && !artist) return null
+  if (!name && !artist) {
+    // Paused with nothing loaded: nothing to show.
+    if (f[0] !== 'playing') return null
+    // Playing, but Music describes no track (often a streamed song): still show the band.
+    return {
+      isPlaying: true,
+      id: 'undescribed',
+      name: 'Playing in Music',
+      artist: 'Music shares no track details',
+      album: '',
+      bpm: 0,
+      position: num(f[6]),
+      duration: num(f[7]),
+    }
+  }
   return {
     isPlaying: f[0] === 'playing',
     id: f[1] || `${name}|${artist}`,
@@ -228,18 +253,7 @@ export function noteColor(hue: number): number {
   return (r! << 16) | (g! << 8) | b!
 }
 
-export function clock(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-export function progressBar(position: number, duration: number, width: number): string {
-  if (duration <= 0 || width <= 0) return ''
-  const filled = Math.round(Math.min(1, position / duration) * width)
-  return '━'.repeat(filled) + '─'.repeat(width - filled)
-}
-
-/** Milliseconds to the next bop: the track's beat when it has a BPM, else a loose random groove. */
+/** Milliseconds to the next beat: the track's beat when it has a BPM, else a loose random groove. */
 export function beatMs(bpm: number, random: number): number {
   if (bpm > 0) {
     let ms = 60000 / bpm
@@ -250,44 +264,92 @@ export function beatMs(bpm: number, random: number): number {
   return 380 + random * 320
 }
 
-// Boombox by VK, from https://asciiart.website/art/2612, drawn as the artist
-// made it (credited in the README). Only its notes change color.
-const BOOMBOX = [
-  '                     .',
-  '                    /|',
-  "         .         | o'",
-  "         |        o'",
-  '         |    bla bla bla',
-  " ________|_   /'",
-  '|==+===== O|',
-  '|(%)[oo](%)| VK',
-  "`----------'",
-]
-export const BOOMBOX_COLS = Math.max(...BOOMBOX.map(line => line.length))
-export const BOOMBOX_ROWS = BOOMBOX.length
+const ACCENT = 0xd97757
+const RING_RESTING = 0x8a8a8a
+const RING_TRACK = 0x444444
 
-/** The art's three notes, as [row, column] cells. */
-const BOOMBOX_NOTES: (readonly [number, number])[][] = [
-  [[2, 19], [3, 18], [3, 19]],
-  [[0, 21], [1, 20], [1, 21], [2, 21], [2, 22]],
-  [[5, 14], [5, 15]],
-]
-export const BOOMBOX_NOTE_COUNT = BOOMBOX_NOTES.length
-
-const RESTING = 0x6b6b6b
-
-/** The boombox with each note in `colors[i]`; null (paused) rests them in gray. */
-export function boomboxCells(colors: readonly number[] | null): string {
-  const tint = new Map<string, number>()
-  BOOMBOX_NOTES.forEach((note, i) =>
-    note.forEach(([r, c]) => tint.set(`${r},${c}`, colors?.[i] ?? RESTING)),
-  )
-  const words: number[] = []
-  BOOMBOX.forEach((line, r) => {
-    for (let c = 0; c < BOOMBOX_COLS; c++) {
-      words.push(line.charCodeAt(c) || 0x20, tint.get(`${r},${c}`) ?? DEFAULT, DEFAULT)
+// The ring: a circle 9 dots across in braille, whose cells hold 2 x 4 dots.
+// Braille dots are as far apart across as down, so the circle comes out round.
+const RING_DOTS: { x: number; y: number; at: number }[] = (() => {
+  const dots: { x: number; y: number; at: number }[] = []
+  const cx = (RING_COLS * 2 - 1) / 2
+  const cy = (BAND_ROWS * 4 - 1) / 2
+  for (let y = 0; y < BAND_ROWS * 4; y++) {
+    for (let x = 0; x < RING_COLS * 2; x++) {
+      const d = Math.hypot(x - cx, y - cy)
+      if (Math.abs(d - 4) <= 0.55) {
+        // Clockwise from twelve o'clock, 0..1.
+        const at = (Math.atan2(x - cx, cy - y) / (2 * Math.PI) + 1) % 1
+        dots.push({ x, y, at })
+      }
     }
+  }
+  return dots
+})()
+
+const BRAILLE_BIT = [
+  [0x01, 0x08],
+  [0x02, 0x10],
+  [0x04, 0x20],
+  [0x40, 0x80],
+]
+
+/**
+ * The progress ring, RING_COLS x BAND_ROWS cells: the played part of the
+ * track lit clockwise from the top, the rest dim. A cell shows one color, so
+ * a cell the arc reaches shows only its lit dots.
+ */
+export function ringCells(fraction: number, isPlaying: boolean): string {
+  const lit = Math.max(0, Math.min(1, fraction))
+  const cells = Array.from({ length: RING_COLS * BAND_ROWS }, () => ({ on: 0, off: 0 }))
+  for (const dot of RING_DOTS) {
+    const cell = cells[Math.floor(dot.y / 4) * RING_COLS + Math.floor(dot.x / 2)]!
+    const bit = BRAILLE_BIT[dot.y % 4]![dot.x % 2]!
+    if (dot.at < lit) cell.on |= bit
+    else cell.off |= bit
+  }
+  const words: number[] = []
+  for (const cell of cells) {
+    if (cell.on) words.push(0x2800 + cell.on, isPlaying ? ACCENT : RING_RESTING, DEFAULT)
+    else if (cell.off) words.push(0x2800 + cell.off, RING_TRACK, DEFAULT)
+    else words.push(0x20, DEFAULT, DEFAULT)
+  }
+  return encode(words)
+}
+
+/** One note in the notes frame: its cell, color and glyph. */
+export type FloatingNote = { col: number; row: number; color: number; glyph: number }
+
+/**
+ * One beat of the notes frame: every note rises a row, those past the top
+ * leave, and (with `spawn`) a new one starts on the bottom row at a random column.
+ */
+export function riseNotes(
+  notes: readonly FloatingNote[],
+  random: () => number,
+  spawn = true,
+): FloatingNote[] {
+  const risen = notes.map(note => ({ ...note, row: note.row - 1 })).filter(note => note.row >= 0)
+  if (!spawn) return risen
+  risen.push({
+    col: Math.floor(random() * NOTES_COLS),
+    row: BAND_ROWS - 1,
+    color: noteColor(random()),
+    glyph: random() < 0.5 ? 0x266a : 0x266b,
   })
+  return risen
+}
+
+/** The notes frame, NOTES_COLS x BAND_ROWS cells. */
+export function notesCells(notes: readonly FloatingNote[]): string {
+  const words: number[] = []
+  for (let row = 0; row < BAND_ROWS; row++) {
+    for (let col = 0; col < NOTES_COLS; col++) {
+      const note = notes.find(n => n.row === row && n.col === col)
+      if (note) words.push(note.glyph, note.color, DEFAULT)
+      else words.push(0x20, DEFAULT, DEFAULT)
+    }
+  }
   return encode(words)
 }
 
