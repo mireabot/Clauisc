@@ -294,3 +294,44 @@ export function beatMs(bpm: number, random: number): number {
   }
   return 380 + random * 320
 }
+
+// Boombox by VK, from https://asciiart.website/art/2612, drawn as the artist
+// made it (credited in the README). Only its notes change color.
+const BOOMBOX = [
+  '                     .',
+  '                    /|',
+  "         .         | o'",
+  "         |        o'",
+  '         |    bla bla bla',
+  " ________|_   /'",
+  '|==+===== O|',
+  '|(%)[oo](%)| VK',
+  "`----------'",
+]
+export const BOOMBOX_COLS = Math.max(...BOOMBOX.map(line => line.length))
+export const BOOMBOX_ROWS = BOOMBOX.length
+
+/** The art's three notes, as [row, column] cells. */
+const BOOMBOX_NOTES: (readonly [number, number])[][] = [
+  [[2, 19], [3, 18], [3, 19]],
+  [[0, 21], [1, 20], [1, 21], [2, 21], [2, 22]],
+  [[5, 14], [5, 15]],
+]
+export const BOOMBOX_NOTE_COUNT = BOOMBOX_NOTES.length
+
+const RESTING = 0x6b6b6b
+
+/** The boombox with each note in `colors[i]`; null (paused) rests them in gray. */
+export function boomboxCells(colors: readonly number[] | null): string {
+  const tint = new Map<string, number>()
+  BOOMBOX_NOTES.forEach((note, i) =>
+    note.forEach(([r, c]) => tint.set(`${r},${c}`, colors?.[i] ?? RESTING)),
+  )
+  const words: number[] = []
+  BOOMBOX.forEach((line, r) => {
+    for (let c = 0; c < BOOMBOX_COLS; c++) {
+      words.push(line.charCodeAt(c) || 0x20, tint.get(`${r},${c}`) ?? DEFAULT, DEFAULT)
+    }
+  })
+  return encode(words)
+}

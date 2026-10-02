@@ -14,6 +14,10 @@ import {
   clock,
   isPixels,
   parseInfo,
+  BOOMBOX_COLS,
+  BOOMBOX_NOTE_COUNT,
+  BOOMBOX_ROWS,
+  boomboxCells,
   noteColor,
   plushCells,
   progressBar,
@@ -27,12 +31,18 @@ const style = atom({ plugin: 'clauisc', key: 'style' } as const, 'blocks')
 const ART_FILE = '/tmp/clauisc-art'
 const POLL_MS = 2000
 
+function beatColors(): number[] {
+  return Array.from({ length: BOOMBOX_NOTE_COUNT }, () => noteColor(Math.random()))
+}
+
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
   current: null as Track | null,
   artFor: null as string | null,
   frame: 0,
   note: noteColor(Math.random()),
+  tones: beatColors(),
+  hasBoombox: false,
   bandId: null as string | null,
   isPolling: false,
   poller: null as Timer | null,
@@ -84,9 +94,15 @@ function bop($: EngineInterface) {
     if (live.current?.isPlaying && live.bandId) {
       live.frame = (live.frame + 1) % 4
       live.note = noteColor(Math.random())
+      live.tones = beatColors()
       $.ui
         .blit({ requestId: live.bandId, key: 'plush', cells: plushCells(live.frame, live.note) })
         .catch(() => undefined)
+      if (live.hasBoombox) {
+        $.ui
+          .blit({ requestId: live.bandId, key: 'boombox', cells: boomboxCells(live.tones) })
+          .catch(() => undefined)
+      }
     }
     bop($)
   })
@@ -126,7 +142,13 @@ export const register: Register = on => {
     const cols = e.props.bodyColumns
     const artSize = e.props.maxRows >= 8 && cols >= 70 ? 16 : 8
     const artRows = artSize / 2
-    const textCols = Math.max(0, Math.min(34, cols - artSize - PLUSH_COLS - 6))
+    // The boombox joins when the band has room for it beside 20 columns of text.
+    const hasBoombox = e.props.maxRows >= BOOMBOX_ROWS && cols >= artSize + PLUSH_COLS + BOOMBOX_COLS + 8 + 20
+    live.hasBoombox = hasBoombox
+    const textCols = Math.max(
+      0,
+      Math.min(34, cols - artSize - PLUSH_COLS - 6 - (hasBoombox ? BOOMBOX_COLS + 2 : 0)),
+    )
     const status = t.isPlaying ? '▶' : '⏸'
     const time = t.duration > 0 ? `${clock(t.position)} / ${clock(t.duration)}` : clock(t.position)
 
@@ -157,6 +179,16 @@ export const register: Register = on => {
             <Text color="#d97757">{progressBar(t.position, t.duration, textCols)}</Text>
           ) : null}
         </Box>
+        {hasBoombox ? (
+          <Box marginLeft={2}>
+            <Raster
+              key="boombox"
+              columns={BOOMBOX_COLS}
+              rows={BOOMBOX_ROWS}
+              cells={boomboxCells(t.isPlaying ? live.tones : null)}
+            />
+          </Box>
+        ) : null}
         <Box marginLeft={1}>
           <Raster
             key="plush"

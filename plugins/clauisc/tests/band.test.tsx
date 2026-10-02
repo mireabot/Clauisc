@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { ART_PX, artCells, beatMs, noteColor, parseInfo, plushCells } from '../hooks/lib'
+import { ART_PX, BOOMBOX_COLS, artCells, beatMs, boomboxCells, noteColor, parseInfo, plushCells } from '../hooks/lib'
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
@@ -50,6 +50,7 @@ describe('clauisc', () => {
     expect(await ui.find({ type: 'Text', text: 'Frank Ocean' })).toBeDefined()
     expect(await ui.find({ key: 'cover' })).toBeDefined()
     expect(await ui.find({ key: 'plush' })).toBeDefined()
+    expect(await ui.find({ key: 'boombox' })).toBeDefined()
 
     // The plush bops on the beat while playing.
     await clock.advance(2000)
@@ -97,6 +98,22 @@ describe('clauisc', () => {
     }
     const still = Uint8Array.from(atob(plushCells(-1, 0x12ab34)), c => c.charCodeAt(0))
     expect(new Uint32Array(still.buffer).includes(0x266a)).toBe(false)
+  })
+
+  test("keeps VK's boombox as drawn and colors only its notes", async () => {
+    const decode = (cells: string) => {
+      const b = Uint8Array.from(atob(cells), c => c.charCodeAt(0))
+      return new Uint32Array(b.buffer)
+    }
+    const words = decode(boomboxCells([0x111111, 0x222222, 0x333333]))
+    const row = (r: number) =>
+      String.fromCharCode(...[...Array(BOOMBOX_COLS).keys()].map(c => words[(r * BOOMBOX_COLS + c) * 3]!)).trimEnd()
+    expect(row(4)).toBe('         |    bla bla bla')
+    expect(row(7)).toBe('|(%)[oo](%)| VK')
+    const colored = new Set([...Array(words.length / 3).keys()].map(i => words[i * 3 + 1]))
+    expect([...colored].sort()).toEqual([0x111111, 0x222222, 0x333333, 0x01000000].sort())
+    const resting = decode(boomboxCells(null))
+    expect(resting.includes(0x111111)).toBe(false)
   })
 
   test('encodes every frame and style as whole cells', async () => {

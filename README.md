@@ -2,8 +2,8 @@
 
 **Apple Music, live in your Claude Code prompt.** Clauisc is a Claude Code
 plugin that shows what's playing on the right side of the band above your
-input line: a pixel-art album cover, the track, and a little Claude plush in
-headphones bopping along.
+input line: a pixel-art album cover, the track, a boombox whose notes flash
+to the beat, and a little Claude plush in headphones bopping along.
 
 ```
  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Pink + White          ♪ ▄▄▄▄
@@ -26,8 +26,12 @@ headphones bopping along.
 - **Bopping plush**: Claude in headphones bobs and tilts on every beat, using
   the track's BPM when Apple Music has one and a loose random groove
   otherwise. Each beat floats a ♪ in a fresh random color. Paused, it rests.
-- **Fits the terminal**: an 8×4 cover in small windows, a single line in
-  narrow ones.
+- **Boombox**: VK's ASCII boombox (see [Credits](#credits)) plays along; its
+  three notes each take a random color on every beat and rest in gray while
+  paused. It shows when the terminal has room, at least about 85 columns and
+  9 rows for the band.
+- **Fits the terminal**: the boombox steps aside first, then the cover
+  shrinks to 8×4, then the band becomes a single line.
 - **No dependencies**: only macOS's built-in `osascript`.
 
 ## Requirements
@@ -90,8 +94,9 @@ Play something in Music and the band appears above your prompt.
    cells are about twice as tall as wide, so 16×8 cells look square. ASCII
    mode averages the two pixels and picks a character from `.:-=+*#%@` by
    brightness, drawn in that color.
-4. **Drawing**: the cover and the plush are Claude Code `Raster` elements.
-   On each beat the plush is repainted in place, without redrawing the band.
+4. **Drawing**: the cover, the boombox and the plush are Claude Code
+   `Raster` elements. On each beat the plush and the boombox's notes are
+   repainted in place, without redrawing the band.
 
 ## Customizing
 
@@ -102,7 +107,8 @@ Everything visual lives in
 | --- | --- |
 | `HEAD`, `BODY`, `LEGS` | The plush sprite, one character per pixel (`.` is transparent; other letters are `PALETTE` keys) |
 | `PALETTE` | Plush colors |
-| `noteColor` | How each beat's ♪ color is picked |
+| `noteColor` | How each beat's note colors are picked |
+| `BOOMBOX_NOTES` | Which cells of the boombox are notes |
 | `ASCII_RAMP` | ASCII cover characters, dark to bright |
 | `beatMs` | How BPM maps to bop speed |
 
@@ -137,10 +143,16 @@ install.sh                        local install for every session
 
 ## Credits
 
+- **Boombox** ASCII art by **VK**, from
+  [asciiart.website/art/2612](https://asciiart.website/art/2612)
+  (Christopher Johnson's ASCII Art Collection). It is drawn unchanged, with
+  the artist's signature; Clauisc only colors its notes. The art belongs to
+  its artist and is not covered by this repository's MIT license.
 - The Claude plush is original fan art inspired by Claude Code's mascot.
   Clauisc is a fan project, not affiliated with or endorsed by Anthropic.
   Claude is a trademark of Anthropic.
 
 ## License
 
-[MIT](LICENSE)
+Code: [MIT](LICENSE). Third-party art keeps its own terms; see
+[Credits](#credits).
