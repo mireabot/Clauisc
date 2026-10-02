@@ -5,16 +5,9 @@ plugin that sits right-aligned just above your input line: the track, a
 progress ring, and music notes rising to the beat, framed like a little
 boombox.
 
-```
- ________________________________________________
-|                       ♪                  ⢀⡤⠶⢤⡀ |
-| Landline            ♫                    ⢾   ⡷ |
-| binki                  ♪                 ⠈⠓⠶⠚⠁ |
-|                                                |
-`------------------------------------------------'
-```
+![Clauisc playing Landline by binki above the Claude Code prompt](Clausic_Claude_Demo.png)
 
-> **Status: early.** Tested against a mocked Music app and on macOS 26. Reports and screenshots are welcome in
+> **Status: early.** Running on macOS 26 with Apple Music. Reports and screenshots are welcome in
 > [Issues](https://github.com/mireabot/Clauisc/issues).
 
 ## Features
