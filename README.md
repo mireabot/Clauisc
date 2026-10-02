@@ -196,9 +196,8 @@ install.sh                        local install for every session
 - Now Playing is system-wide: if another app (a browser, Spotify) is the
   current player, the band shows that.
 - Now Playing has no BPM, so the notes usually rise on a random groove.
-
-- Some Apple Music streaming and radio tracks don't expose artwork to
-  AppleScript; those get a placeholder cover.
+- If neither Now Playing nor Music provides an image, the cover is a
+  placeholder.
 - The cover, ring and notes are terminal only; other Claude Code surfaces
   get one line of text.
 
