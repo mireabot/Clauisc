@@ -230,8 +230,19 @@ const LEGS = ['...o.o..o.o.', '..o.o..o.o..']
 export const PLUSH_COLS = 14
 export const PLUSH_ROWS = 5
 
-/** Frame 0..3 of the bop: down, tilt right, down, tilt left; -1 is still. */
-export function plushCells(frame: number): string {
+/** A bright, saturated color for a beat's note: `hue` in 0..1. */
+export function noteColor(hue: number): number {
+  const h = (((hue % 1) + 1) % 1) * 6
+  const x = Math.round(255 * (1 - Math.abs((h % 2) - 1)))
+  const [r, g, b] = [[255, x, 0], [x, 255, 0], [0, 255, x], [0, x, 255], [x, 0, 255], [255, 0, x]][Math.floor(h)]!
+  return (r! << 16) | (g! << 8) | b!
+}
+
+/**
+ * Frame 0..3 of the bop: down, tilt right, down, tilt left; -1 is still.
+ * Every frame floats a ♪ in `note`'s color, alternating sides.
+ */
+export function plushCells(frame: number, note = PALETTE.o!): string {
   const W = PLUSH_COLS, H = PLUSH_ROWS * 2
   const canvas: (number | null)[][] = Array.from({ length: H }, () => Array(W).fill(null))
   const still = frame < 0
@@ -254,8 +265,8 @@ export function plushCells(frame: number): string {
       const top = canvas[r * 2]![x]!
       const bottom = canvas[r * 2 + 1]![x]!
       const noteHere = !still && r === 0 && top === null && bottom === null &&
-        ((frame === 1 && x === W - 1) || (frame === 3 && x === 0))
-      if (noteHere) words.push(NOTE, PALETTE.o!, DEFAULT)
+        x === (frame % 2 === 0 ? W - 1 : 0)
+      if (noteHere) words.push(NOTE, note, DEFAULT)
       else halfCell(words, top, bottom)
     }
   }

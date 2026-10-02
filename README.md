@@ -17,6 +17,7 @@ of the band above your prompt:
   refreshed every 2 seconds.
 - **Plush**: Claude in headphones, bopping on the track's BPM when Apple Music
   has one, on a loose random groove otherwise, and resting while paused.
+  Every beat floats a ♪ in a fresh random color.
 - Narrow or short terminals get an 8×4 cover, then a single line.
 
 ## Requirements

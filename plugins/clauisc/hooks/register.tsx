@@ -14,6 +14,7 @@ import {
   clock,
   isPixels,
   parseInfo,
+  noteColor,
   plushCells,
   progressBar,
 } from './lib'
@@ -31,6 +32,7 @@ const live = {
   current: null as Track | null,
   artFor: null as string | null,
   frame: 0,
+  note: noteColor(Math.random()),
   bandId: null as string | null,
   isPolling: false,
   poller: null as Timer | null,
@@ -81,8 +83,9 @@ function bop($: EngineInterface) {
   $.clock.after(beatMs(live.current?.bpm ?? 0, Math.random()), () => {
     if (live.current?.isPlaying && live.bandId) {
       live.frame = (live.frame + 1) % 4
+      live.note = noteColor(Math.random())
       $.ui
-        .blit({ requestId: live.bandId, key: 'plush', cells: plushCells(live.frame) })
+        .blit({ requestId: live.bandId, key: 'plush', cells: plushCells(live.frame, live.note) })
         .catch(() => undefined)
     }
     bop($)
@@ -159,7 +162,7 @@ export const register: Register = on => {
             key="plush"
             columns={PLUSH_COLS}
             rows={PLUSH_ROWS}
-            cells={plushCells(t.isPlaying ? live.frame : -1)}
+            cells={plushCells(t.isPlaying ? live.frame : -1, live.note)}
           />
         </Box>
       </Box>

@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { ART_PX, artCells, beatMs, parseInfo, plushCells } from '../hooks/lib'
+import { ART_PX, artCells, beatMs, noteColor, parseInfo, plushCells } from '../hooks/lib'
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
@@ -83,6 +83,20 @@ describe('clauisc', () => {
     expect(await ui.find({ key: 'cover' })).toBeDefined()
     expect(await ui.drawn()).toMatchObject({ type: 'Box' })
     await ui.unmount()
+  })
+
+  test("colors each beat's note brightly and draws it in that color", async () => {
+    expect(noteColor(0)).toBe(0xff0000)
+    expect(noteColor(1 / 3)).toBe(0x00ff00)
+    for (const frame of [0, 1, 2, 3]) {
+      const b = Uint8Array.from(atob(plushCells(frame, 0x12ab34)), c => c.charCodeAt(0))
+      const words = new Uint32Array(b.buffer)
+      const notes = [...Array(words.length / 3).keys()].filter(i => words[i * 3] === 0x266a)
+      expect(notes.length).toBe(1)
+      expect(words[notes[0]! * 3 + 1]).toBe(0x12ab34)
+    }
+    const still = Uint8Array.from(atob(plushCells(-1, 0x12ab34)), c => c.charCodeAt(0))
+    expect(new Uint32Array(still.buffer).includes(0x266a)).toBe(false)
   })
 
   test('encodes every frame and style as whole cells', async () => {
