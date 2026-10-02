@@ -18,6 +18,7 @@ declare module 'claude-code' {
       art: string | null
       isHidden: boolean
       style: ArtStyle
+      problem: string | null
     }
   }
 }

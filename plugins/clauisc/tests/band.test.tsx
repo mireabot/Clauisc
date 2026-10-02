@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { ART_PX, BOOMBOX_COLS, artCells, beatMs, boomboxCells, noteColor, parseInfo, plushCells } from '../hooks/lib'
+import { ART_PX, BOOMBOX_COLS, artCells, beatMs, boomboxCells, explainFailure, noteColor, parseInfo, plushCells } from '../hooks/lib'
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
@@ -114,6 +114,64 @@ describe('clauisc', () => {
     expect([...colored].sort()).toEqual([0x111111, 0x222222, 0x333333, 0x01000000].sort())
     const resting = decode(boomboxCells(null))
     expect(resting.includes(0x111111)).toBe(false)
+  })
+
+  test('explains a blocked Automation permission instead of hiding', async ($, on) => {
+    on('process.run', async () => ({
+      value: {
+        exitCode: 1,
+        stdout: '',
+        stderr: 'execution error: Not authorized to send Apple events to Music. (-1743)',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }))
+    const clock = mock.clock(on)
+    on('command.register', async (_, e) => ({ value: { command: e.name } }))
+    on('session.start', async (_, e) => ({ cwd: e.cwd }))
+    on('ui.blit', async () => ({}))
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    await clock.advance(10)
+
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
+    expect(await ui.find({ type: 'Text', text: /Automation/ })).toBeDefined()
+    await ui.unmount()
+    expect(explainFailure('boom (-1743)')).toMatch(/Privacy & Security/)
+  })
+
+  test('keeps polling after osascript fails once, and status says what happened', async ($, on) => {
+    let calls = 0
+    on('process.run', async ($, e) => {
+      calls += 1
+      if (calls === 1) throw new Error('timed out')
+      const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
+      return {
+        value: {
+          exitCode: 0,
+          stdout: script.includes('raw data') ? 'none\n' : INFO,
+          stderr: '',
+          isStdoutTruncated: false,
+          isStderrTruncated: false,
+        },
+      }
+    })
+    const clock = mock.clock(on)
+    on('command.register', async (_, e) => ({ value: { command: e.name } }))
+    on('session.start', async (_, e) => ({ cwd: e.cwd }))
+    on('ui.blit', async () => ({}))
+    on('ui.render', async ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return <Text>engine band</Text>
+    })
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    await clock.advance(10)
+    await clock.advance(2000)
+
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
+    expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
+    const report = await $.command.run({ command: 'nowplaying', args: 'status' } as never)
+    expect(JSON.stringify(report)).toMatch(/playing \\"Pink \+ White\\"/)
+    await ui.unmount()
   })
 
   test('encodes every frame and style as whole cells', async () => {

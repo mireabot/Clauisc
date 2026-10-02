@@ -80,6 +80,26 @@ Play something in Music and the band appears above your prompt.
 | `/nowplaying` | Hide or show the band |
 | `/nowplaying ascii` | Draw the cover as colored ASCII |
 | `/nowplaying blocks` | Draw the cover as half-block pixels (default) |
+| `/nowplaying status` | Report what Clauisc sees: osascript's result, the track, artwork, and whether the band was drawn |
+
+## Troubleshooting
+
+Run `/nowplaying status` first; it checks Music right away and reports what it
+found.
+
+- **The band says macOS is blocking access to Music**: open System Settings →
+  Privacy & Security → Automation, turn on **Music** under your terminal app,
+  and restart the terminal.
+- **No band and no message**: nothing is playing, or Music isn't open. Start a
+  track; the band appears within 2 seconds.
+- **`band drawn: 0 times`**: Claude Code isn't loading the plugin. Check
+  `claude --version`, run `claude plugin validate ~/Clauisc/plugins/clauisc`,
+  and start with `claude --debug --plugin-dir ~/Clauisc/plugins/clauisc` to
+  see why.
+- **Check Music directly**:
+  `osascript -e 'tell application "Music" to get name of current track'`
+- **Claude Code desktop app**: only the terminal draws the cover and the
+  plush; other surfaces show a one-line band.
 
 ## How it works
 

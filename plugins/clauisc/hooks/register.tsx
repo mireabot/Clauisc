@@ -12,6 +12,7 @@ import {
   artCells,
   beatMs,
   clock,
+  explainFailure,
   isPixels,
   parseInfo,
   BOOMBOX_COLS,
@@ -27,9 +28,15 @@ const track = atom({ plugin: 'clauisc', key: 'track' } as const, null)
 const art = atom({ plugin: 'clauisc', key: 'art' } as const, null)
 const isHidden = atom({ plugin: 'clauisc', key: 'isHidden' } as const, false)
 const style = atom({ plugin: 'clauisc', key: 'style' } as const, 'blocks')
+const problem = atom({ plugin: 'clauisc', key: 'problem' } as const, null)
 
 const ART_FILE = '/tmp/clauisc-art'
 const POLL_MS = 2000
+// An absolute path: apps that start Claude Code may give it a bare PATH.
+const OSASCRIPT = '/usr/bin/osascript'
+// Long enough for the person to answer macOS's first "control Music?" prompt,
+// which holds osascript until it is answered.
+const INFO_TIMEOUT_MS = 60000
 
 function beatColors(): number[] {
   return Array.from({ length: BOOMBOX_NOTE_COUNT }, () => noteColor(Math.random()))
@@ -46,22 +53,35 @@ const live = {
   bandId: null as string | null,
   isPolling: false,
   poller: null as Timer | null,
+  // Diagnostics for /nowplaying status.
+  polls: 0,
+  renders: 0,
+  surface: null as string | null,
+  lastExit: null as number | null,
+  lastStdout: '',
+  lastStderr: '',
+  lastError: null as string | null,
+  artStatus: 'not loaded',
 }
 
 async function loadArt($: EngineInterface, id: string) {
   let pixels: string | null = null
   try {
-    const dumped = await $.process.run(['osascript', '-e', ART_SCRIPT, ART_FILE], { timeoutMs: 8000 })
+    const dumped = await $.process.run([OSASCRIPT, '-e', ART_SCRIPT, ART_FILE], { timeoutMs: 8000 })
     if (dumped.stdout.trim() === 'ok') {
       const sampled = await $.process.run(
-        ['osascript', '-l', 'JavaScript', '-e', SAMPLE_SCRIPT, ART_FILE, String(ART_PX), String(ART_PX)],
+        [OSASCRIPT, '-l', 'JavaScript', '-e', SAMPLE_SCRIPT, ART_FILE, String(ART_PX), String(ART_PX)],
         { timeoutMs: 8000 },
       )
       const hex = sampled.stdout.trim()
       if (isPixels(hex)) pixels = hex
+      live.artStatus = pixels ? 'loaded' : `sampling failed (exit ${sampled.exitCode}): ${sampled.stderr.trim().slice(0, 160)}`
+    } else {
+      live.artStatus = `no artwork from Music (${dumped.stdout.trim() || dumped.stderr.trim().slice(0, 160)})`
     }
-  } catch {
+  } catch (error) {
     // No artwork is drawn as a placeholder.
+    live.artStatus = `could not run osascript: ${String(error).slice(0, 160)}`
   }
   if (live.artFor === id) await update($, art, () => pixels)
 }
@@ -69,10 +89,16 @@ async function loadArt($: EngineInterface, id: string) {
 async function poll($: EngineInterface) {
   if (live.isPolling) return
   live.isPolling = true
+  live.polls += 1
   try {
-    const { stdout } = await $.process.run(['osascript', '-e', INFO_SCRIPT], { timeoutMs: 5000 })
-    const now = parseInfo(stdout)
+    const ran = await $.process.run([OSASCRIPT, '-e', INFO_SCRIPT], { timeoutMs: INFO_TIMEOUT_MS })
+    live.lastExit = ran.exitCode
+    live.lastStdout = ran.stdout.trim().slice(0, 300)
+    live.lastStderr = ran.stderr.trim().slice(0, 300)
+    live.lastError = null
+    const now = ran.exitCode === 0 ? parseInfo(ran.stdout) : null
     live.current = now
+    await update($, problem, () => (ran.exitCode === 0 ? null : explainFailure(ran.stderr)))
     await update($, track, () => now)
     if (now && now.id !== live.artFor) {
       live.artFor = now.id
@@ -80,13 +106,27 @@ async function poll($: EngineInterface) {
       await loadArt($, now.id)
     }
     if (!now) live.artFor = null
-  } catch {
-    // osascript missing (not macOS): stop asking.
-    live.poller?.cancel()
-    live.poller = null
+  } catch (error) {
+    // osascript could not start or ran past the timeout: say so and keep trying.
+    live.lastError = String(error).slice(0, 300)
+    await update($, problem, () => `Could not run osascript: ${live.lastError}`)
   } finally {
     live.isPolling = false
   }
+}
+
+function statusReport(): string {
+  const t = live.current
+  return [
+    'Clauisc status',
+    `- polls: ${live.polls}, last osascript exit: ${live.lastExit ?? 'none yet'}`,
+    `- last error: ${live.lastError ?? 'none'}`,
+    `- stdout: ${JSON.stringify(live.lastStdout)}`,
+    `- stderr: ${JSON.stringify(live.lastStderr)}`,
+    `- track: ${t ? `${t.isPlaying ? 'playing' : 'paused'} "${t.name}" by ${t.artist || 'unknown'} (bpm ${t.bpm})` : 'none'}`,
+    `- artwork: ${live.artStatus}`,
+    `- band drawn: ${live.renders} times, surface ${live.surface ?? 'never asked'}`,
+  ].join('\n')
 }
 
 function bop($: EngineInterface) {
@@ -112,9 +152,10 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'nowplaying',
-      description: 'Toggle the Apple Music band; "/nowplaying ascii" or "blocks" switches the cover style',
+      description: 'Toggle the Apple Music band; "ascii" or "blocks" switches the cover style, "status" explains what it sees',
     })
     void poll($)
+    live.poller?.cancel()
     live.poller = $.clock.every(POLL_MS, () => void poll($))
     bop($)
 
@@ -123,6 +164,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'nowplaying' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    if (arg === 'status') {
+      await poll($)
+      return { text: statusReport() }
+    }
     if (arg === 'ascii' || arg === 'blocks') {
       await update($, style, () => arg)
       await update($, isHidden, () => false)
@@ -133,13 +178,40 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.surface !== 'terminal') return next(e)
+    live.renders += 1
+    live.surface = e.surface
+    if (e.props.hasSurvey || (await read($, isHidden))) return next(e)
     const t = await read($, track)
-    if (e.props.hasSurvey || t === null || (await read($, isHidden))) return next(e)
+    const cols = e.props.bodyColumns
+
+    if (t === null) {
+      const why = await read($, problem)
+      if (!why) return next(e)
+      const { Box, Text } = $.ui.resolve(e)
+      return (
+        <Box justifyContent="flex-end" width={cols}>
+          <Text color="#d97757" wrap="wrap">
+            ♪ Clauisc: {why}
+          </Text>
+        </Box>
+      )
+    }
+
+    const status = t.isPlaying ? '▶' : '⏸'
+    if (e.surface !== 'terminal') {
+      // Only the terminal draws Rasters: elsewhere the band is one line of text.
+      const { Box, Text } = $.ui.resolve(e)
+      return (
+        <Box justifyContent="flex-end" width={cols}>
+          <Text wrap="truncate-end">
+            {status} {t.name}{t.artist ? ` · ${t.artist}` : ''}
+          </Text>
+        </Box>
+      )
+    }
 
     live.bandId = e.requestId
     const { Box, Text, Raster } = $.ui.resolve(e)
-    const cols = e.props.bodyColumns
     const artSize = e.props.maxRows >= 8 && cols >= 70 ? 16 : 8
     const artRows = artSize / 2
     // The boombox joins when the band has room for it beside 20 columns of text.
@@ -149,7 +221,6 @@ export const register: Register = on => {
       0,
       Math.min(34, cols - artSize - PLUSH_COLS - 6 - (hasBoombox ? BOOMBOX_COLS + 2 : 0)),
     )
-    const status = t.isPlaying ? '▶' : '⏸'
     const time = t.duration > 0 ? `${clock(t.position)} / ${clock(t.duration)}` : clock(t.position)
 
     if (textCols < 12) {

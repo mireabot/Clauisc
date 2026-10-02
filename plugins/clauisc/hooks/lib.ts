@@ -335,3 +335,13 @@ export function boomboxCells(colors: readonly number[] | null): string {
   })
   return encode(words)
 }
+
+/** A one-line, actionable reading of osascript's error output. */
+export function explainFailure(stderr: string): string {
+  if (/-1743|not authori[sz]ed|Not allowed to send Apple events/i.test(stderr)) {
+    return 'macOS is blocking access to Music. Allow your terminal app under System Settings → Privacy & Security → Automation → Music, then restart it.'
+  }
+  if (/-1728|-1708/.test(stderr)) return 'Music has no current track it can describe.'
+  const line = stderr.trim().split('\n').pop() ?? ''
+  return line ? `osascript failed: ${line.slice(0, 160)}` : 'osascript failed without saying why.'
+}
