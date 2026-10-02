@@ -3,19 +3,13 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Track } from '../types'
 import {
-  ART_PX,
-  ART_SCRIPT,
   BAND_ROWS,
-  COVER_COLS,
   INFO_SCRIPT,
   NOW_SCRIPT,
   NOTES_COLS,
   RING_COLS,
-  SAMPLE_SCRIPT,
-  artCells,
   beatMs,
   explainFailure,
-  isPixels,
   notesCells,
   parseInfo,
   parseNowPlaying,
@@ -25,12 +19,9 @@ import {
 import type { FloatingNote } from './lib'
 
 const track = atom({ plugin: 'clauisc', key: 'track' } as const, null)
-const art = atom({ plugin: 'clauisc', key: 'art' } as const, null)
 const isHidden = atom({ plugin: 'clauisc', key: 'isHidden' } as const, false)
-const style = atom({ plugin: 'clauisc', key: 'style' } as const, 'blocks')
 const problem = atom({ plugin: 'clauisc', key: 'problem' } as const, null)
 
-const ART_FILE = '/tmp/clauisc-art'
 const POLL_MS = 2000
 // An absolute path: apps that start Claude Code may give it a bare PATH.
 const OSASCRIPT = '/usr/bin/osascript'
@@ -40,15 +31,12 @@ const INFO_TIMEOUT_MS = 60000
 
 // Spacing in terminal columns (a column is about 8-9 px wide).
 const GAP = 1 // between components
-const ART_TEXT_GAP = 1 // between the cover and the title/artist stack
-const TEXT_MAX = 26
+const TEXT_MAX = 36 // widest the centered title/artist stack gets
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
   current: null as Track | null,
   polledAt: 0,
-  artFor: null as string | null,
-  artworkId: '',
   source: 'none yet',
   notes: [] as FloatingNote[],
   bandId: null as string | null,
@@ -69,39 +57,16 @@ const live = {
   lastStdout: '',
   lastStderr: '',
   lastError: null as string | null,
-  artStatus: 'not loaded',
-}
-
-async function loadArt($: EngineInterface, id: string) {
-  let pixels: string | null = null
-  try {
-    const dumped = await $.process.run([OSASCRIPT, '-e', ART_SCRIPT, ART_FILE], { timeoutMs: 8000 })
-    if (dumped.stdout.trim() === 'ok') {
-      const sampled = await $.process.run(
-        [OSASCRIPT, '-l', 'JavaScript', '-e', SAMPLE_SCRIPT, ART_FILE, String(ART_PX), String(ART_PX)],
-        { timeoutMs: 8000 },
-      )
-      const hex = sampled.stdout.trim()
-      if (isPixels(hex)) pixels = hex
-      live.artStatus = pixels ? 'loaded' : `sampling failed (exit ${sampled.exitCode}): ${sampled.stderr.trim().slice(0, 160)}`
-    } else {
-      live.artStatus = `no artwork from Music (${dumped.stdout.trim() || dumped.stderr.trim().slice(0, 160)})`
-    }
-  } catch (error) {
-    // No artwork is drawn as a placeholder.
-    live.artStatus = `could not run osascript: ${String(error).slice(0, 160)}`
-  }
-  if (live.artFor === id) await update($, art, () => pixels)
 }
 
 /** System Now Playing first: it describes streamed songs that Music's AppleScript cannot. */
 async function pollNowPlaying($: EngineInterface): Promise<boolean> {
   const ran = await $.process.run(
-    [OSASCRIPT, '-l', 'JavaScript', '-e', NOW_SCRIPT, live.artworkId, String(ART_PX)],
+    [OSASCRIPT, '-l', 'JavaScript', '-e', NOW_SCRIPT],
     { timeoutMs: INFO_TIMEOUT_MS },
   )
   live.nowPlayingExit = ran.exitCode
-  live.nowPlayingStdout = ran.stdout.replace(/"pixels":"[0-9a-f]+"/, '"pixels":"…"').trim().slice(0, 300)
+  live.nowPlayingStdout = ran.stdout.trim().slice(0, 300)
   live.nowPlayingStderr = ran.stderr.trim().slice(0, 300)
   const found = ran.exitCode === 0 ? parseNowPlaying(ran.stdout) : null
   if (!found) return false
@@ -110,19 +75,6 @@ async function pollNowPlaying($: EngineInterface): Promise<boolean> {
   live.current = found.track
   await update($, problem, () => null)
   await update($, track, () => found.track)
-  if (found.track && found.artworkId && found.artworkId !== live.artworkId) {
-    // New artwork: drawn once per artwork id, whether or not its image could be read.
-    live.artworkId = found.artworkId
-    live.artFor = found.track.id
-    if (found.pixels) {
-      live.artStatus = `loaded from Now Playing (${found.artworkSource})`
-      await update($, art, () => found.pixels)
-    } else {
-      live.artStatus = `Now Playing gave no image (tried ${found.artworkSource ?? 'nothing'}); trying Music`
-      await update($, art, () => null)
-      await loadArt($, found.track.id)
-    }
-  }
   return true
 }
 
@@ -137,12 +89,6 @@ async function pollMusic($: EngineInterface) {
   live.current = now
   await update($, problem, () => (ran.exitCode === 0 ? null : explainFailure(ran.stderr)))
   await update($, track, () => now)
-  if (now && now.id !== live.artFor) {
-    live.artFor = now.id
-    await update($, art, () => null)
-    await loadArt($, now.id)
-  }
-  if (!now) live.artFor = null
 }
 
 async function poll($: EngineInterface) {
@@ -174,7 +120,6 @@ async function statusReport($: EngineInterface): Promise<string> {
     `- Now Playing: exit ${live.nowPlayingExit ?? 'not run'}, stdout ${JSON.stringify(live.nowPlayingStdout)}, stderr ${JSON.stringify(live.nowPlayingStderr)}`,
     `- Music AppleScript: exit ${live.lastExit ?? 'not run'}, stdout ${JSON.stringify(live.lastStdout)}, stderr ${JSON.stringify(live.lastStderr)}`,
     `- track: ${t ? `${t.isPlaying ? 'playing' : 'paused'} "${t.name}" by ${t.artist || 'unknown'} at ${Math.round(t.position)}/${Math.round(t.duration)}s (bpm ${t.bpm})` : 'none'}`,
-    `- artwork: ${live.artStatus}`,
     `- band drawn: ${live.renders} times, surface ${live.surface ?? 'never asked'}`,
   ].join('\n')
 }
@@ -214,7 +159,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'nowplaying',
-      description: 'Toggle the Apple Music band; "ascii" or "blocks" switches the cover style, "status" explains what it sees',
+      description: 'Toggle the Apple Music band; "/nowplaying status" explains what it sees',
     })
     void poll($)
     live.poller?.cancel()
@@ -232,11 +177,6 @@ export const register: Register = on => {
     if (arg === 'status') {
       await poll($)
       return { text: await statusReport($) }
-    }
-    if (arg === 'ascii' || arg === 'blocks') {
-      await update($, style, () => arg)
-      await update($, isHidden, () => false)
-      return { text: `Clauisc: cover drawn as ${arg}.` }
     }
     const hidden = await update($, isHidden, was => !was)
     return { text: hidden ? 'Clauisc band hidden.' : 'Clauisc band shown.' }
@@ -264,7 +204,7 @@ export const register: Register = on => {
 
     const status = t.isPlaying ? '▶' : '⏸'
     // The boombox body: top edge, a side each way and the rounded bottom, then the notes.
-    const fixed = 2 + GAP + COVER_COLS + ART_TEXT_GAP + GAP + RING_COLS + GAP + GAP + NOTES_COLS
+    const fixed = 2 + GAP + GAP + RING_COLS + GAP + GAP + NOTES_COLS
     const textCols = Math.min(TEXT_MAX, cols - fixed - 1)
     const hasFrame = e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10
     live.hasFrame = hasFrame
@@ -283,8 +223,7 @@ export const register: Register = on => {
 
     live.bandId = e.requestId
     const { Box, Text, Raster } = $.ui.resolve(e)
-    const inner = GAP + COVER_COLS + ART_TEXT_GAP + textCols + GAP + RING_COLS + GAP
-    const cover = artCells(await read($, art), COVER_COLS, await read($, style))
+    const inner = GAP + textCols + GAP + RING_COLS + GAP
     const ring = ringCells(progress(t, await $.clock.now()), t.isPlaying)
     const side = (
       <Box flexDirection="column">
@@ -300,16 +239,13 @@ export const register: Register = on => {
           <Text dimColor>{` ${'_'.repeat(inner)}`}</Text>
           <Box flexDirection="row">
             {side}
-            <Box marginLeft={GAP}>
-              <Raster key="cover" columns={COVER_COLS} rows={BAND_ROWS} cells={cover} />
-            </Box>
             <Box
               flexDirection="column"
               justifyContent="center"
-              alignItems="flex-start"
+              alignItems="center"
               width={textCols}
               height={BAND_ROWS}
-              marginLeft={ART_TEXT_GAP}
+              marginLeft={GAP}
             >
               <Text bold wrap="truncate-end">{t.name}</Text>
               {t.artist ? <Text dimColor wrap="truncate-end">{t.artist}</Text> : null}

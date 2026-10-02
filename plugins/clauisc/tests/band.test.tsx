@@ -1,13 +1,10 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import {
-  ART_PX,
-  ART_SCRIPT,
   BAND_ROWS,
   INFO_SCRIPT,
   NOTES_COLS,
   RING_COLS,
-  artCells,
   beatMs,
   explainFailure,
   noteColor,
@@ -25,7 +22,6 @@ const decode = (cells: string) => {
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
-const HEX = 'd97757'.repeat(ART_PX * ART_PX)
 
 const BAND = {
   component: 'AbovePrompt',
@@ -48,7 +44,7 @@ describe('clauisc', () => {
 
   test('names no AppleScript variable after a reserved word', async () => {
     // "st", "nd", "rd" and "th" are ordinal suffixes ("1st") and fail to compile as names.
-    for (const script of [INFO_SCRIPT, ART_SCRIPT]) {
+    for (const script of [INFO_SCRIPT]) {
       const names = [...script.matchAll(/\bset \{?([\w, ]+?)\}? to\b/g)].flatMap(m => m[1]!.split(/,\s*/))
       for (const name of names) {
         expect(['st', 'nd', 'rd', 'th']).not.toContain(name.trim())
@@ -63,14 +59,12 @@ describe('clauisc', () => {
     expect(beatMs(0, 0)).toBe(380)
   })
 
-  test('draws the boombox frame with cover, text, ring and notes on the terminal', async ($, on) => {
+  test('draws the boombox frame with the centered title stack, ring and notes', async ($, on) => {
     const ran = (stdout: string) => ({
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
     on('process.run', async ($, e) => {
       const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
-      if (script.includes('raw data')) return ran('ok\n')
-      if (script.includes('NSBitmapImageRep')) return ran(HEX + '\n')
       return ran(INFO)
     })
     const clock = mock.clock(on)
@@ -87,7 +81,7 @@ describe('clauisc', () => {
     const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'Frank Ocean' })).toBeDefined()
-    expect(await ui.find({ key: 'cover' })).toBeDefined()
+    expect(await ui.find({ key: 'cover' })).toBeUndefined()
     expect(await ui.find({ key: 'ring' })).toBeDefined()
     expect(await ui.find({ key: 'notes' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^ _+$/ })).toBeDefined()
@@ -101,29 +95,6 @@ describe('clauisc', () => {
     await $.command.run({ command: 'nowplaying', args: '' } as never)
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: 'engine band' })).toBeDefined()
-    await ui.unmount()
-  })
-
-  test('draws a placeholder cover when the track has no artwork', async ($, on) => {
-    on('process.run', async ($, e) => ({
-      value: {
-        exitCode: 0,
-        stdout: (e.argv[e.argv.indexOf('-e') + 1] ?? '').includes('raw data') ? 'none\n' : INFO,
-        stderr: '',
-        isStdoutTruncated: false,
-        isStderrTruncated: false,
-      },
-    }))
-    const clock = mock.clock(on)
-    on('command.register', async (_, e) => ({ value: { command: e.name } }))
-    on('session.start', async (_, e) => ({ cwd: e.cwd }))
-    on('ui.blit', async () => ({}))
-    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
-    await clock.advance(10)
-
-    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
-    expect(await ui.find({ key: 'cover' })).toBeDefined()
-    expect(await ui.drawn()).toMatchObject({ type: 'Box' })
     await ui.unmount()
   })
 
@@ -185,7 +156,7 @@ describe('clauisc', () => {
       return {
         value: {
           exitCode: 0,
-          stdout: script.includes('raw data') ? 'none\n' : INFO,
+          stdout: INFO,
           stderr: '',
           isStdoutTruncated: false,
           isStderrTruncated: false,
@@ -215,7 +186,7 @@ describe('clauisc', () => {
     let state = 'paused'
     on('process.run', async ($, e) => {
       const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
-      const stdout = script.includes('raw data') ? 'none\n' : INFO.replace('playing', state)
+      const stdout = INFO.replace('playing', state)
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     const clock = mock.clock(on)
@@ -245,16 +216,13 @@ describe('clauisc', () => {
   test('reads system Now Playing, as seen on macOS 26 with a streamed song', async () => {
     const real = JSON.stringify({
       state: 'playing', id: '7F3A', title: 'Landline', artist: 'binki', album: 'MOTOR FUNCTION - EP',
-      position: 2.463346083, duration: 160.377, artworkId: 'art-1', artworkSource: 'item.artwork', pixels: HEX,
+      position: 2.463346083, duration: 160.377,
     })
     expect(parseNowPlaying(real)).toEqual({
       track: {
         isPlaying: true, id: '7F3A', name: 'Landline', artist: 'binki', album: 'MOTOR FUNCTION - EP',
         bpm: 0, position: 2.463346083, duration: 160.377,
       },
-      artworkId: 'art-1',
-      artworkSource: 'item.artwork',
-      pixels: HEX,
     })
     expect(parseNowPlaying(JSON.stringify({ state: 'paused', title: 'Landline', artist: 'binki' }))?.track?.isPlaying).toBe(false)
     expect(parseNowPlaying(JSON.stringify({ state: 'stopped' }))).toMatchObject({ track: null })
@@ -268,11 +236,9 @@ describe('clauisc', () => {
       const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
       const stdout = script.includes('MRNowPlayingRequest')
         ? nowPlayingWorks
-          ? JSON.stringify({ state: 'playing', id: '7F3A', title: 'Landline', artist: 'binki', album: 'EP', position: 3, duration: 160, artworkId: 'a1', artworkSource: 'item.artwork', pixels: HEX })
+          ? JSON.stringify({ state: 'playing', id: '7F3A', title: 'Landline', artist: 'binki', album: 'EP', position: 3, duration: 160 })
           : JSON.stringify({ error: 'MRNowPlayingRequest is unavailable' })
-        : script.includes('raw data')
-          ? 'none\n'
-          : INFO
+        : INFO
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     })
     const clock = mock.clock(on)
@@ -287,7 +253,6 @@ describe('clauisc', () => {
     expect(await ui.find({ type: 'Text', text: 'binki' })).toBeDefined()
     const report = JSON.stringify(await $.command.run({ command: 'nowplaying', args: 'status' } as never))
     expect(report).toMatch(/source: system Now Playing/)
-    expect(report).toMatch(/loaded from Now Playing \(item.artwork\)/)
 
     nowPlayingWorks = false
     await clock.advance(2500)
@@ -295,9 +260,4 @@ describe('clauisc', () => {
     await ui.unmount()
   })
 
-  test('encodes every cover style as whole cells', async () => {
-    expect(artCells(HEX, 16, 'blocks')).toEqual(expect.any(String))
-    expect(artCells(HEX, 8, 'ascii')).toEqual(expect.any(String))
-    expect(artCells(null, 16, 'blocks')).toEqual(expect.any(String))
-  })
 })

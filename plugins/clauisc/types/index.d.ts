@@ -9,15 +9,11 @@ export type Track = {
   duration: number
 }
 
-export type ArtStyle = 'blocks' | 'ascii'
-
 declare module 'claude-code' {
   interface PluginState {
     'clauisc': {
       track: Track | null
-      art: string | null
       isHidden: boolean
-      style: ArtStyle
       problem: string | null
     }
   }

@@ -1,19 +1,11 @@
-import type { ArtStyle, Track } from '../types'
+import type { Track } from '../types'
 
-/** Album art is sampled at ART_PX x ART_PX and drawn two pixels per cell. */
-export const ART_PX = 12
-
-/** Every piece of the band is three rows tall: the cover, the ring and the notes. */
+/** Every piece of the band is three rows tall: the title stack, the ring and the notes. */
 export const BAND_ROWS = 3
-export const COVER_COLS = 6
 export const RING_COLS = 5
 export const NOTES_COLS = 5
 
 const DEFAULT = 0x01000000
-const HALF_TOP = 0x2580 // ▀
-const HALF_BOTTOM = 0x2584 // ▄
-const NOTE = 0x266a // ♪
-const ASCII_RAMP = '.:-=+*#%@'
 
 const SEP = '\u001f'
 
@@ -65,75 +57,14 @@ tell application "Music"
 end tell
 `
 
-/** AppleScript writing the current track's artwork bytes to the path in argv. */
-export const ART_SCRIPT = `
-on run argv
-  set outPath to item 1 of argv
-  tell application "Music"
-    try
-      set artBytes to raw data of artwork 1 of current track
-    on error
-      try
-        set artBytes to data of artwork 1 of current track
-      on error
-        return "none"
-      end try
-    end try
-  end tell
-  set outFile to open for access (POSIX file outPath) with write permission
-  try
-    set eof outFile to 0
-    write artBytes to outFile
-  end try
-  close access outFile
-  return "ok"
-end run
-`
-
-// JXA that scales an NSImage to W x H and returns its pixels as hex RGB.
-const PIXELS_JS = `
-function pixels(img, W, H) {
-  var rep = $.NSBitmapImageRep.alloc.initWithBitmapDataPlanesPixelsWidePixelsHighBitsPerSampleSamplesPerPixelHasAlphaIsPlanarColorSpaceNameBytesPerRowBitsPerPixel(null, W, H, 8, 4, true, false, $.NSDeviceRGBColorSpace, 0, 0);
-  $.NSGraphicsContext.saveGraphicsState;
-  var ctx = $.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep);
-  ctx.imageInterpolation = $.NSImageInterpolationHigh;
-  $.NSGraphicsContext.currentContext = ctx;
-  img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, W, H), $.NSMakeRect(0, 0, 0, 0), $.NSCompositingOperationCopy, 1);
-  $.NSGraphicsContext.restoreGraphicsState;
-  var out = '';
-  for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
-    var c = rep.colorAtXY(x, y);
-    [c.redComponent, c.greenComponent, c.blueComponent].forEach(function (v) {
-      var n = Math.max(0, Math.min(255, Math.round(v * 255)));
-      out += (n < 16 ? '0' : '') + n.toString(16);
-    });
-  }
-  return out;
-}
-`
-
-/** JXA scaling an image file to W x H and printing its pixels as hex RGB. */
-export const SAMPLE_SCRIPT = `
-ObjC.import('AppKit');
-${PIXELS_JS}
-function run(argv) {
-  var img = $.NSImage.alloc.initWithContentsOfFile(argv[0]);
-  if (img.isNil()) return '';
-  return pixels(img, parseInt(argv[1]), parseInt(argv[2]));
-}
-`
-
 /**
  * JXA reading macOS's system Now Playing info (what Control Center shows),
  * which also describes streamed Apple Music songs that Music's AppleScript
- * cannot. argv: the artwork id already drawn, then the pixel size. Prints
- * JSON (NowPlaying); `pixels` only when the artwork changed and could be read.
+ * cannot. Prints JSON for parseNowPlaying.
  */
 export const NOW_SCRIPT = `
-ObjC.import('AppKit');
-${PIXELS_JS}
-function run(argv) {
-  var drawnArtwork = argv[0] || '', size = parseInt(argv[1]);
+ObjC.import('Foundation');
+function run() {
   $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
   var request = $.NSClassFromString('MRNowPlayingRequest');
   if (request.isNil()) return JSON.stringify({ error: 'MRNowPlayingRequest is unavailable' });
@@ -147,7 +78,7 @@ function run(argv) {
   var elapsed = Number(get('ElapsedTime') || 0);
   var stamp = raw('Timestamp');
   var since = stamp.isNil() ? 0 : -stamp.timeIntervalSinceNow;
-  var out = {
+  return JSON.stringify({
     state: rate > 0 ? 'playing' : 'paused',
     id: String(get('UniqueIdentifier') || get('ContentItemIdentifier') || ''),
     title: get('Title') || '',
@@ -155,27 +86,10 @@ function run(argv) {
     album: get('Album') || '',
     position: elapsed + rate * since,
     duration: Number(get('Duration') || 0),
-    artworkId: String(get('ArtworkIdentifier') || ''),
-  };
-  if (out.artworkId && out.artworkId !== drawnArtwork) {
-    var data = null, source = 'none';
-    try {
-      var artwork = item.artwork;
-      if (!artwork.isNil() && !artwork.imageData.isNil()) { data = artwork.imageData; source = 'item.artwork'; }
-    } catch (e) {}
-    if (!data) {
-      var inline = raw('ArtworkData');
-      if (!inline.isNil()) { data = inline; source = 'ArtworkData'; }
-    }
-    out.artworkSource = source;
-    if (data) {
-      var img = $.NSImage.alloc.initWithData(data);
-      if (!img.isNil()) out.pixels = pixels(img, size, size);
-    }
-  }
-  return JSON.stringify(out);
+  });
 }
 `
+
 
 const num = (s: string | undefined) => {
   const n = parseFloat((s ?? '').trim().replace(',', '.'))
@@ -218,13 +132,8 @@ export function parseInfo(stdout: string): Track | null {
   }
 }
 
-/** What NOW_SCRIPT reports, parsed: the track, its artwork id, and pixels when read. */
-export type NowPlaying = {
-  track: Track | null
-  artworkId: string
-  artworkSource: string | null
-  pixels: string | null
-}
+/** What NOW_SCRIPT reports, parsed: the track, or null when nothing is playing. */
+export type NowPlaying = { track: Track | null }
 
 /**
  * NOW_SCRIPT's JSON as a track; null when it is not Now Playing JSON at all
@@ -257,14 +166,7 @@ export function parseNowPlaying(stdout: string): NowPlaying | null {
           duration: number('duration'),
         }
       : null,
-    artworkId: text('artworkId'),
-    artworkSource: text('artworkSource') || null,
-    pixels: isPixels(text('pixels')) ? text('pixels') : null,
   }
-}
-
-export function isPixels(hex: string): boolean {
-  return hex.length === ART_PX * ART_PX * 6 && /^[0-9a-f]+$/.test(hex)
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -280,75 +182,6 @@ export function encode(words: number[]): string {
     out += i + 2 < bytes.length ? B64[n & 63]! : '='
   }
   return out
-}
-
-/** One cell from a top and bottom pixel; null is transparent. */
-function halfCell(words: number[], top: number | null, bottom: number | null) {
-  if (top === null && bottom === null) words.push(0x20, DEFAULT, DEFAULT)
-  else if (top === null) words.push(HALF_BOTTOM, bottom!, DEFAULT)
-  else words.push(HALF_TOP, top, bottom ?? DEFAULT)
-}
-
-/** Pixel grid from hex, box-averaged down by `scale`. */
-function pixels(hex: string, scale: number): number[][] {
-  const size = ART_PX / scale
-  const grid: number[][] = []
-  for (let y = 0; y < size; y++) {
-    const row: number[] = []
-    for (let x = 0; x < size; x++) {
-      let r = 0, g = 0, b = 0
-      for (let dy = 0; dy < scale; dy++) {
-        for (let dx = 0; dx < scale; dx++) {
-          const i = ((y * scale + dy) * ART_PX + x * scale + dx) * 6
-          r += parseInt(hex.slice(i, i + 2), 16)
-          g += parseInt(hex.slice(i + 2, i + 4), 16)
-          b += parseInt(hex.slice(i + 4, i + 6), 16)
-        }
-      }
-      const n = scale * scale
-      row.push((Math.round(r / n) << 16) | (Math.round(g / n) << 8) | Math.round(b / n))
-    }
-    grid.push(row)
-  }
-  return grid
-}
-
-const mix = (a: number, b: number) =>
-  ((((a >> 16) + (b >> 16)) >> 1) << 16) |
-  (((((a >> 8) & 0xff) + ((b >> 8) & 0xff)) >> 1) << 8) |
-  (((a & 0xff) + (b & 0xff)) >> 1)
-
-const luma = (c: number) => (0.2126 * (c >> 16) + 0.7152 * ((c >> 8) & 0xff) + 0.0722 * (c & 0xff)) / 255
-
-/**
- * Raster cells for the album art: `size` columns by `size / 2` rows.
- * `blocks` packs two pixels per cell; `ascii` picks a ramp character by
- * brightness, colored with the cell's average.
- */
-export function artCells(hex: string | null, size: number, style: ArtStyle): string {
-  const rows = size / 2
-  const words: number[] = []
-  if (!hex) {
-    // No artwork: a dim checker so the slot still reads as a cover.
-    for (let y = 0; y < rows; y++)
-      for (let x = 0; x < size; x++)
-        words.push(x === size >> 1 && y === rows >> 1 ? NOTE : 0x2591, 0x6b6b6b, DEFAULT)
-    return encode(words)
-  }
-  const grid = pixels(hex, ART_PX / size)
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < size; x++) {
-      const top = grid[y * 2]![x]!
-      const bottom = grid[y * 2 + 1]![x]!
-      if (style === 'blocks') halfCell(words, top, bottom)
-      else {
-        const c = mix(top, bottom)
-        const i = Math.min(ASCII_RAMP.length - 1, Math.floor(luma(c) * ASCII_RAMP.length))
-        words.push(ASCII_RAMP.charCodeAt(i), c, DEFAULT)
-      }
-    }
-  }
-  return encode(words)
 }
 
 /** A bright, saturated color for a beat's note: `hue` in 0..1. */

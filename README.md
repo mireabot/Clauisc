@@ -1,16 +1,16 @@
 # Clauisc
 
 **Apple Music, live in your Claude Code prompt.** Clauisc is a Claude Code
-plugin that sits right-aligned just above your input line: the album cover,
-the track, a progress ring, and music notes rising to the beat, framed like
-a little boombox.
+plugin that sits right-aligned just above your input line: the track, a
+progress ring, and music notes rising to the beat, framed like a little
+boombox.
 
 ```
- _________________________________________
-| ▀▀▀▀▀▀ Pink + White               ⢀⡤⠶⢤⡀ |   ♪
-| ▀▀▀▀▀▀ Frank Ocean                ⢾   ⡷ | ♫
-| ▀▀▀▀▀▀                            ⠈⠓⠶⠚⠁ |    ♪
-`-----------------------------------------'
+ ____________________________________________
+|               Landline               ⢀⡤⠶⢤⡀ |   ♪
+|                binki                 ⢾   ⡷ | ♫
+|                                      ⠈⠓⠶⠚⠁ |    ♪
+`--------------------------------------------'
 ```
 
 > **Status: early.** Tested against a mocked Music app and on macOS 26. Reports and screenshots are welcome in
@@ -18,9 +18,7 @@ a little boombox.
 
 ## Features
 
-- **Cover**: the current track's artwork in true color, 6×6 pixels in a 6×3
-  cell square. `/nowplaying ascii` switches to colored ASCII.
-- **Title and artist**, stacked and left-aligned beside the cover.
+- **Title and artist**, stacked and centered, with room for long titles.
 - **Progress ring**: a 9-dot circle in braille that fills clockwise from the
   top as the track plays; accent-colored while playing, gray while paused.
 - **Rising notes**: on every beat a ♪ or ♫ in a random color starts at the
@@ -40,7 +38,7 @@ a little boombox.
 - Claude Code in the terminal, on a build that supports function-hook
   plugins.
 - A true-color terminal (Terminal, iTerm2, Ghostty, kitty, WezTerm) for the
-  best cover.
+  ring and note colors.
 - On first run macOS asks whether your terminal may control **Music**; allow
   it. You can change this later in System Settings → Privacy & Security →
   Automation.
@@ -78,9 +76,7 @@ Play something in Music and the band appears above your prompt.
 | Command | Effect |
 | --- | --- |
 | `/nowplaying` | Hide or show the band |
-| `/nowplaying ascii` | Draw the cover as colored ASCII |
-| `/nowplaying blocks` | Draw the cover as half-block pixels (default) |
-| `/nowplaying status` | Report what Clauisc sees: osascript's result, the track, timers, artwork, and whether the band was drawn |
+| `/nowplaying status` | Report what Clauisc sees: which source answered, osascript's output, the track, timers, and whether the band was drawn |
 
 ## Troubleshooting
 
@@ -101,30 +97,23 @@ found.
   see why.
 - **Check Music directly**:
   `osascript -e 'tell application "Music" to get name of current track'`
-- **Small window or the desktop app**: the band needs 5 rows and about 50
-  columns, and only the terminal draws the cover, ring and notes; otherwise
-  it's one line of text.
+- **Small window or the desktop app**: the band needs 5 rows and about 30
+  columns, and only the terminal draws the ring and notes; otherwise it's
+  one line of text.
 
 ## How it works
 
 1. **Track**: every 2 seconds a JavaScript for Automation script reads
    macOS's system **Now Playing** info, the same data Control Center's media
-   widget shows: title, artist, album, position, duration and artwork. It
+   widget shows: title, artist, album, position and duration. It
    describes streamed Apple Music songs, which Music's own AppleScript can't
    on recent macOS. If Now Playing can't be read, Clauisc falls back to
    asking Music through AppleScript. The beat timer doubles as a backup: if
    the 2-second timer goes quiet, it checks itself.
-2. **Artwork**: when the artwork changes, the same script scales it to 12×12
-   with AppKit and prints each pixel's RGB; Clauisc averages that down to
-   6×6. If Now Playing has no image, AppleScript asks Music for it and writes
-   it to `/tmp/clauisc-art` first.
-3. **Cover**: each cell holds two pixels, an upper half block `▀` whose
-   foreground is the top pixel and background the bottom one, so 6×3 cells
-   look square.
-4. **Ring**: braille cells hold 2×4 dots spaced evenly across and down, so a
+2. **Ring**: braille cells hold 2×4 dots spaced evenly across and down, so a
    circle drawn in dots stays round. Between polls the ring advances from the
    time since the last one.
-5. **Drawing**: the cover, ring and notes are Claude Code `Raster` elements.
+3. **Drawing**: the ring and notes are Claude Code `Raster` elements.
    On each beat the ring and notes are repainted in place, without
    redrawing the band.
 
@@ -135,12 +124,11 @@ drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 
 | Name | What it controls |
 | --- | --- |
-| `GAP`, `ART_TEXT_GAP` | Columns between components, and between the cover and the text |
-| `TEXT_MAX` | Widest the title/artist column gets |
-| `COVER_COLS`, `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
+| `GAP` | Columns between components |
+| `TEXT_MAX` | Widest the centered title/artist stack gets |
+| `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
 | `noteColor` | How each note's color is picked |
 | `riseNotes` | How notes start and rise |
-| `ASCII_RAMP` | ASCII cover characters, dark to bright |
 | `beatMs` | How BPM maps to the beat |
 
 ## Development
@@ -181,7 +169,7 @@ Once the plugin has loaded, Claude Code writes its API types to
 plugins/clauisc/
   .claude-plugin/plugin.json      plugin manifest
   hooks/register.tsx              hooks: polling, beat, band layout, /nowplaying
-  hooks/lib.ts                    AppleScript/JXA, parsing, cover, ring and notes cells
+  hooks/lib.ts                    AppleScript/JXA, parsing, ring and notes cells
   types/index.d.ts                state contract
   tests/band.test.tsx             tests
 install.sh                        local install for every session
@@ -196,9 +184,7 @@ install.sh                        local install for every session
 - Now Playing is system-wide: if another app (a browser, Spotify) is the
   current player, the band shows that.
 - Now Playing has no BPM, so the notes usually rise on a random groove.
-- If neither Now Playing nor Music provides an image, the cover is a
-  placeholder.
-- The cover, ring and notes are terminal only; other Claude Code surfaces
+- The ring and notes are terminal only; other Claude Code surfaces
   get one line of text.
 
 ## Credits
