@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { ART_PX, BOOMBOX_COLS, artCells, beatMs, boomboxCells, explainFailure, noteColor, parseInfo } from '../hooks/lib'
+import { ART_PX, ART_SCRIPT, INFO_SCRIPT, BOOMBOX_COLS, artCells, beatMs, boomboxCells, explainFailure, noteColor, parseInfo } from '../hooks/lib'
 
 const SEP = '\u001f'
 const INFO = ['playing', 'ABC123', 'Pink + White', 'Frank Ocean', 'Blonde', '160', '61,5', '184.5'].join(SEP) + '\n'
@@ -16,6 +16,17 @@ describe('clauisc', () => {
     const t = parseInfo(INFO)
     expect(t).toMatchObject({ isPlaying: true, id: 'ABC123', name: 'Pink + White', bpm: 160, position: 61.5, duration: 184.5 })
     expect(parseInfo('stopped\n')).toBe(null)
+  })
+
+  test('names no AppleScript variable after a reserved word', async () => {
+    // "st", "nd", "rd" and "th" are ordinal suffixes ("1st") and fail to compile as names.
+    for (const script of [INFO_SCRIPT, ART_SCRIPT]) {
+      const names = [...script.matchAll(/\bset \{?([\w, ]+?)\}? to\b/g)].flatMap(m => m[1]!.split(/,\s*/))
+      for (const name of names) {
+        expect(['st', 'nd', 'rd', 'th']).not.toContain(name.trim())
+        expect(name.trim().length).toBeGreaterThan(1)
+      }
+    }
   })
 
   test('bops on the beat, folded into a comfortable range', async () => {

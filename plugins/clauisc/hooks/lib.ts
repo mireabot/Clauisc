@@ -11,67 +11,69 @@ const ASCII_RAMP = '.:-=+*#%@'
 
 const SEP = '\u001f'
 
-/** AppleScript printing the player state and current track, one field per line. */
+/** AppleScript printing the player state and current track, fields split by U+001F. */
 export const INFO_SCRIPT = `
 if application "Music" is not running then return "stopped"
 tell application "Music"
-  set st to player state as string
-  if st is "stopped" then return "stopped"
-  set t to current track
-  set {tid, tn, ta, tb, tbpm, tdur} to {"", "", "", "", 0, 0}
+  set stateText to player state as string
+  if stateText is "stopped" then return "stopped"
+  set {trackKey, trackName, trackArtist, trackAlbum, trackBpm, trackLength} to {"", "", "", "", 0, 0}
   try
-    set tid to persistent ID of t
-  end try
-  try
-    set tn to name of t
-  end try
-  try
-    set ta to artist of t
-  end try
-  try
-    set tb to album of t
-  end try
-  try
-    set tbpm to bpm of t
-  end try
-  try
-    set tdur to duration of t
-  end try
-  if tn is "" then
+    set nowTrack to current track
     try
-      set tn to current stream title
+      set trackKey to persistent ID of nowTrack
+    end try
+    try
+      set trackName to name of nowTrack
+    end try
+    try
+      set trackArtist to artist of nowTrack
+    end try
+    try
+      set trackAlbum to album of nowTrack
+    end try
+    try
+      set trackBpm to bpm of nowTrack
+    end try
+    try
+      set trackLength to duration of nowTrack
+    end try
+  end try
+  if trackName is "" then
+    try
+      set trackName to current stream title
     end try
   end if
-  set pos to 0
+  set playhead to 0
   try
-    set pos to player position
+    set playhead to player position
   end try
-  set s to (ASCII character 31)
-  return st & s & tid & s & tn & s & ta & s & tb & s & tbpm & s & pos & s & tdur
+  set sep to character id 31
+  return stateText & sep & trackKey & sep & trackName & sep & trackArtist & sep & trackAlbum & sep & trackBpm & sep & playhead & sep & trackLength
 end tell
 `
 
 /** AppleScript writing the current track's artwork bytes to the path in argv. */
 export const ART_SCRIPT = `
 on run argv
-  set p to item 1 of argv
+  set outPath to item 1 of argv
   tell application "Music"
     try
-      set d to raw data of artwork 1 of current track
+      set artBytes to raw data of artwork 1 of current track
     on error
       try
-        set d to data of artwork 1 of current track
+        set artBytes to data of artwork 1 of current track
       on error
         return "none"
       end try
     end try
   end tell
-  set f to open for access (POSIX file p) with write permission
+  set outFile to open for access (POSIX file outPath) with write permission
   try
-    set eof f to 0
-    write d to f
+    set eof outFile to 0
+    write artBytes to outFile
   end try
-  close access f
+  close access outFile
   return "ok"
 end run
 `
