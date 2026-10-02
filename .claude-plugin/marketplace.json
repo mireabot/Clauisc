@@ -1,0 +1,15 @@
+{
+  "name": "now-playing",
+  "description": "A Claude Code mod that shows what Apple Music is playing above your prompt",
+  "owner": {
+    "name": "now-playing maintainers"
+  },
+  "plugins": [
+    {
+      "name": "now-playing",
+      "source": "./plugins/now-playing",
+      "description": "Apple Music now-playing band above the Claude Code prompt: pixel album art, title, artist and a bopping Claude plush",
+      "version": "0.1.0"
+    }
+  ]
+}

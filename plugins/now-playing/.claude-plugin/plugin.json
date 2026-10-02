@@ -1,0 +1,6 @@
+{
+  "name": "now-playing",
+  "version": "0.1.0",
+  "description": "Apple Music now-playing band above the prompt: pixel album art, title, artist and a bopping Claude plush",
+  "types": "./types/index.d.ts"
+}
