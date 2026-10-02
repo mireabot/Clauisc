@@ -6,11 +6,11 @@ progress ring, and music notes rising to the beat, framed like a little
 boombox.
 
 ```
- __________________________________________________
-| Landline               ♪                   ⢀⡤⠶⢤⡀ |
-| binki                ♫                     ⢾   ⡷ |
-|                         ♪                  ⠈⠓⠶⠚⠁ |
-`--------------------------------------------------'
+ ________________________________________________
+| Landline              ♪                  ⢀⡤⠶⢤⡀ |
+| binki               ♫                    ⢾   ⡷ |
+|                        ♪                 ⠈⠓⠶⠚⠁ |
+`------------------------------------------------'
 ```
 
 > **Status: early.** Tested against a mocked Music app and on macOS 26. Reports and screenshots are welcome in

@@ -96,7 +96,7 @@ describe('clauisc', () => {
     }
     walk(await ui.drawn())
     expect(keys).toEqual(['notes', 'ring'])
-    expect((await ui.find({ type: 'Text', text: /^ _+$/ }))?.text.length).toBe(51)
+    expect((await ui.find({ type: 'Text', text: /^ _+$/ }))?.text.length).toBe(49)
 
     // Notes rise and the ring advances on the beat while playing.
     await clock.advance(2000)

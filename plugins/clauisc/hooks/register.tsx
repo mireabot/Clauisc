@@ -33,7 +33,7 @@ const INFO_TIMEOUT_MS = 60000
 const GAP = 1 // between components
 const TEXT_PAD = 1 // left of the title/artist stack, inside the frame
 // Inside width of the boombox frame; the notes sit in its middle.
-const BAR_INNER = 50
+const BAR_INNER = 48
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
