@@ -210,67 +210,12 @@ export function artCells(hex: string | null, size: number, style: ArtStyle): str
   return encode(words)
 }
 
-// The plush: Claude in headphones, 12 x 9 pixels on a 14 x 10 canvas.
-const PALETTE: Record<string, number> = {
-  o: 0xd97757, // body
-  k: 0x1f1f1f, // eyes
-  h: 0xa8adb3, // headband
-  c: 0x4a4f55, // ear cups
-}
-const HEAD = [
-  '....hhhh....',
-  '..hh....hh..',
-  '.h........h.',
-  'cc.oooooo.cc',
-  'cc.okooko.cc',
-  'cc.oooooo.cc',
-]
-const BODY = ['.oooooooooo.', '...oooooo...']
-const LEGS = ['...o.o..o.o.', '..o.o..o.o..']
-export const PLUSH_COLS = 14
-export const PLUSH_ROWS = 5
-
 /** A bright, saturated color for a beat's note: `hue` in 0..1. */
 export function noteColor(hue: number): number {
   const h = (((hue % 1) + 1) % 1) * 6
   const x = Math.round(255 * (1 - Math.abs((h % 2) - 1)))
   const [r, g, b] = [[255, x, 0], [x, 255, 0], [0, 255, x], [0, x, 255], [x, 0, 255], [255, 0, x]][Math.floor(h)]!
   return (r! << 16) | (g! << 8) | b!
-}
-
-/**
- * Frame 0..3 of the bop: down, tilt right, down, tilt left; -1 is still.
- * Every frame floats a ♪ in `note`'s color, alternating sides.
- */
-export function plushCells(frame: number, note = PALETTE.o!): string {
-  const W = PLUSH_COLS, H = PLUSH_ROWS * 2
-  const canvas: (number | null)[][] = Array.from({ length: H }, () => Array(W).fill(null))
-  const still = frame < 0
-  const dy = still ? 0 : frame % 2 === 0 ? 1 : 0
-  const tilt = still ? 0 : [0, 1, 0, -1][frame % 4]!
-  const legs = LEGS[still ? 0 : (frame >> 1) % 2]!
-  const put = (rows: string[], y0: number, dx: number) =>
-    rows.forEach((row, y) =>
-      [...row].forEach((p, x) => {
-        if (p !== '.') canvas[y0 + y + dy]![1 + x + dx] = PALETTE[p] ?? null
-      }),
-    )
-  put(HEAD, 0, tilt)
-  put(BODY, HEAD.length, 0)
-  put([legs], HEAD.length + BODY.length, 0)
-
-  const words: number[] = []
-  for (let r = 0; r < PLUSH_ROWS; r++) {
-    for (let x = 0; x < W; x++) {
-      const top = canvas[r * 2]![x]!
-      const bottom = canvas[r * 2 + 1]![x]!
-      const noteHere = !still && r === 0 && top === null && bottom === null &&
-        x === (frame % 2 === 0 ? W - 1 : 0)
-      if (noteHere) words.push(NOTE, note, DEFAULT)
-      else halfCell(words, top, bottom)
-    }
-  }
-  return encode(words)
 }
 
 export function clock(seconds: number): string {

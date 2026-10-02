@@ -2,15 +2,19 @@
 
 **Apple Music, live in your Claude Code prompt.** Clauisc is a Claude Code
 plugin that shows what's playing on the right side of the band above your
-input line: a pixel-art album cover, the track, a boombox whose notes flash
-to the beat, and a little Claude plush in headphones bopping along.
+input line: a pixel-art album cover, the track, and a boombox whose notes
+flash to the beat.
 
 ```
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Pink + White          ♪ ▄▄▄▄
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Frank Ocean          ▄▀▀    ▀▀▄
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Blonde               ▀▀ ▀▀▀▀▀▀ ▀▀
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ▶ 1:01 / 3:04        ▀▀▄▀▀▀▀▀▀▄▀▀
- ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ━━━━━━━━──────────      ▀▀▀▀▀▀ ▄
+                                                                .
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                              /|
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Pink + White                     .         | o'
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Frank Ocean                      |        o'
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  Blonde                           |    bla bla bla
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ▶ 1:01 / 3:04            ________|_   /'
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  ━━━━━━━━━━──────────    |==+===== O|
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                          |(%)[oo](%)| VK
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                          `----------'
 ```
 
 > **Status: early.** Built and tested against a mocked Music app; first runs
@@ -23,13 +27,11 @@ to the beat, and a little Claude plush in headphones bopping along.
   in 16×8 terminal cells. `/nowplaying ascii` switches to colored ASCII art.
 - **Track info**: title, artist, album, play/pause, time and a progress bar,
   refreshed every 2 seconds.
-- **Bopping plush**: Claude in headphones bobs and tilts on every beat, using
-  the track's BPM when Apple Music has one and a loose random groove
-  otherwise. Each beat floats a ♪ in a fresh random color. Paused, it rests.
 - **Boombox**: VK's ASCII boombox (see [Credits](#credits)) plays along; its
-  three notes each take a random color on every beat and rest in gray while
-  paused. It shows when the terminal has room, at least about 85 columns and
-  9 rows for the band.
+  three notes each take a random color on every beat, following the track's
+  BPM when Apple Music has one and a loose random groove otherwise, and rest
+  in gray while paused. It shows when the band has room: about 65 columns and
+  9 rows.
 - **Fits the terminal**: the boombox steps aside first, then the cover
   shrinks to 8×4, then the band becomes a single line.
 - **No dependencies**: only macOS's built-in `osascript`.
@@ -99,7 +101,7 @@ found.
 - **Check Music directly**:
   `osascript -e 'tell application "Music" to get name of current track'`
 - **Claude Code desktop app**: only the terminal draws the cover and the
-  plush; other surfaces show a one-line band.
+  boombox; other surfaces show a one-line band.
 
 ## How it works
 
@@ -114,9 +116,9 @@ found.
    cells are about twice as tall as wide, so 16×8 cells look square. ASCII
    mode averages the two pixels and picks a character from `.:-=+*#%@` by
    brightness, drawn in that color.
-4. **Drawing**: the cover, the boombox and the plush are Claude Code
-   `Raster` elements. On each beat the plush and the boombox's notes are
-   repainted in place, without redrawing the band.
+4. **Drawing**: the cover and the boombox are Claude Code `Raster`
+   elements. On each beat the boombox's notes are repainted in place,
+   without redrawing the band.
 
 ## Customizing
 
@@ -125,12 +127,10 @@ Everything visual lives in
 
 | Name | What it controls |
 | --- | --- |
-| `HEAD`, `BODY`, `LEGS` | The plush sprite, one character per pixel (`.` is transparent; other letters are `PALETTE` keys) |
-| `PALETTE` | Plush colors |
 | `noteColor` | How each beat's note colors are picked |
 | `BOOMBOX_NOTES` | Which cells of the boombox are notes |
 | `ASCII_RAMP` | ASCII cover characters, dark to bright |
-| `beatMs` | How BPM maps to bop speed |
+| `beatMs` | How BPM maps to the beat the notes change on |
 
 ## Development
 
@@ -148,7 +148,7 @@ The tests mock `osascript`, so they run on any OS. Start Claude Code with
 plugins/clauisc/
   .claude-plugin/plugin.json      plugin manifest
   hooks/register.tsx              hooks: polling, band drawing, /nowplaying
-  hooks/lib.ts                    AppleScript/JXA, parsing, cover and plush cells
+  hooks/lib.ts                    AppleScript/JXA, parsing, cover and boombox cells
   types/index.d.ts                state contract
   tests/band.test.tsx             tests
 install.sh                        local install for every session
@@ -158,7 +158,7 @@ install.sh                        local install for every session
 
 - Some Apple Music streaming and radio tracks don't expose artwork to
   AppleScript; those get a placeholder cover.
-- Most tracks have no BPM tag, so the plush usually bops at random.
+- Most tracks have no BPM tag, so the notes usually change on a random groove.
 - Terminal only: other Claude Code surfaces show their usual band.
 
 ## Credits
@@ -168,8 +168,7 @@ install.sh                        local install for every session
   (Christopher Johnson's ASCII Art Collection). It is drawn unchanged, with
   the artist's signature; Clauisc only colors its notes. The art belongs to
   its artist and is not covered by this repository's MIT license.
-- The Claude plush is original fan art inspired by Claude Code's mascot.
-  Clauisc is a fan project, not affiliated with or endorsed by Anthropic.
+- Clauisc is a fan project, not affiliated with or endorsed by Anthropic.
   Claude is a trademark of Anthropic.
 
 ## License

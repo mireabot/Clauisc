@@ -6,8 +6,6 @@ import {
   ART_PX,
   ART_SCRIPT,
   INFO_SCRIPT,
-  PLUSH_COLS,
-  PLUSH_ROWS,
   SAMPLE_SCRIPT,
   artCells,
   beatMs,
@@ -20,7 +18,6 @@ import {
   BOOMBOX_ROWS,
   boomboxCells,
   noteColor,
-  plushCells,
   progressBar,
 } from './lib'
 
@@ -46,8 +43,6 @@ function beatColors(): number[] {
 const live = {
   current: null as Track | null,
   artFor: null as string | null,
-  frame: 0,
-  note: noteColor(Math.random()),
   tones: beatColors(),
   hasBoombox: false,
   bandId: null as string | null,
@@ -132,12 +127,7 @@ function statusReport(): string {
 function bop($: EngineInterface) {
   $.clock.after(beatMs(live.current?.bpm ?? 0, Math.random()), () => {
     if (live.current?.isPlaying && live.bandId) {
-      live.frame = (live.frame + 1) % 4
-      live.note = noteColor(Math.random())
       live.tones = beatColors()
-      $.ui
-        .blit({ requestId: live.bandId, key: 'plush', cells: plushCells(live.frame, live.note) })
-        .catch(() => undefined)
       if (live.hasBoombox) {
         $.ui
           .blit({ requestId: live.bandId, key: 'boombox', cells: boomboxCells(live.tones) })
@@ -214,13 +204,10 @@ export const register: Register = on => {
     const { Box, Text, Raster } = $.ui.resolve(e)
     const artSize = e.props.maxRows >= 8 && cols >= 70 ? 16 : 8
     const artRows = artSize / 2
-    // The boombox joins when the band has room for it beside 20 columns of text.
-    const hasBoombox = e.props.maxRows >= BOOMBOX_ROWS && cols >= artSize + PLUSH_COLS + BOOMBOX_COLS + 8 + 20
+    // The boombox joins when the band has room for it beside 16 columns of text.
+    const hasBoombox = e.props.maxRows >= BOOMBOX_ROWS && cols >= artSize + BOOMBOX_COLS + 6 + 16
     live.hasBoombox = hasBoombox
-    const textCols = Math.max(
-      0,
-      Math.min(34, cols - artSize - PLUSH_COLS - 6 - (hasBoombox ? BOOMBOX_COLS + 2 : 0)),
-    )
+    const textCols = Math.max(0, Math.min(34, cols - artSize - 4 - (hasBoombox ? BOOMBOX_COLS + 2 : 0)))
     const time = t.duration > 0 ? `${clock(t.position)} / ${clock(t.duration)}` : clock(t.position)
 
     if (textCols < 12) {
@@ -260,14 +247,6 @@ export const register: Register = on => {
             />
           </Box>
         ) : null}
-        <Box marginLeft={1}>
-          <Raster
-            key="plush"
-            columns={PLUSH_COLS}
-            rows={PLUSH_ROWS}
-            cells={plushCells(t.isPlaying ? live.frame : -1, live.note)}
-          />
-        </Box>
       </Box>
     )
   })
