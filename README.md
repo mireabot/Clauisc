@@ -78,6 +78,9 @@ Play something in Music and the band appears above your prompt.
 | --- | --- |
 | `/clauisc` | Hide or show the band |
 | `/clauisc status` | Report what Clauisc sees: which source answered, osascript's output, the track, timers, and whether the band was drawn |
+| `/clauisc width <n>` | Set the frame's inside width (29–200 columns); remembered across sessions |
+| `/clauisc width` | Show the current width |
+| `/clauisc width reset` | Back to the default, 48 |
 
 ## Troubleshooting
 
@@ -120,6 +123,10 @@ found.
 
 ## Customizing
 
+The frame width can be changed live: `/clauisc width 40` narrows it, wider
+values give the title more room. Each 2 columns moves both sides of the
+notes by one.
+
 Layout lives in [`plugins/clauisc/hooks/register.tsx`](plugins/clauisc/hooks/register.tsx),
 drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 
@@ -127,7 +134,7 @@ drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 | --- | --- |
 | `GAP` | Columns between components |
 | `TEXT_PAD` | Columns left of the title/artist stack |
-| `BAR_INNER` | Inside width of the frame; the notes sit in its middle and the title stack fills the space to their left |
+| `BAR_INNER` | Default inside width of the frame (`/clauisc width` overrides it); the notes sit in its middle and the title stack fills the space to their left |
 | `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
 | `noteColor` | How each note's color is picked |
 | `riseNotes` | How notes start and rise |

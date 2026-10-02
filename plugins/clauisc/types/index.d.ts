@@ -15,6 +15,7 @@ declare module 'claude-code' {
       track: Track | null
       isHidden: boolean
       problem: string | null
+      width: number | null
     }
   }
 }

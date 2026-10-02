@@ -21,6 +21,8 @@ import type { FloatingNote } from './lib'
 const track = atom({ plugin: 'clauisc', key: 'track' } as const, null)
 const isHidden = atom({ plugin: 'clauisc', key: 'isHidden' } as const, false)
 const problem = atom({ plugin: 'clauisc', key: 'problem' } as const, null)
+// /clauisc width: the frame's inside width, overriding BAR_INNER; kept in $.store too.
+const width = atom({ plugin: 'clauisc', key: 'width' } as const, null)
 
 const POLL_MS = 2000
 // An absolute path: apps that start Claude Code may give it a bare PATH.
@@ -32,8 +34,11 @@ const INFO_TIMEOUT_MS = 60000
 // Spacing in terminal columns (a column is about 8-9 px wide).
 const GAP = 1 // between components
 const TEXT_PAD = 1 // left of the title/artist stack, inside the frame
-// Inside width of the boombox frame; the notes sit in its middle.
+// Inside width of the boombox frame; the notes sit in its middle. /clauisc width overrides it.
 const BAR_INNER = 48
+// Narrowest frame that still fits a 10-column title stack, the notes and the ring.
+const MIN_INNER = 29
+const MAX_INNER = 200
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
@@ -161,8 +166,10 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'clauisc',
-      description: 'Toggle the Apple Music band; "/clauisc status" explains what it sees',
+      description: 'Toggle the Apple Music band; "status" explains what it sees, "width <n>" sets the frame width',
     })
+    const saved = await $.store.get('width').catch(() => undefined)
+    if (typeof saved === 'number') await update($, width, () => saved)
     void poll($)
     live.poller?.cancel()
     live.poller = $.clock.every(POLL_MS, () => {
@@ -176,6 +183,25 @@ export const register: Register = on => {
 
   on('command.run', { command: 'clauisc' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    const [word, value] = arg.split(/\s+/)
+    if (word === 'width') {
+      if (value === undefined) {
+        const now = (await read($, width)) ?? BAR_INNER
+        return { text: `Clauisc frame width: ${now} (default ${BAR_INNER}). Set it with /clauisc width <${MIN_INNER}-${MAX_INNER}> or /clauisc width reset.` }
+      }
+      if (value === 'reset') {
+        await $.store.delete('width')
+        await update($, width, () => null)
+        return { text: `Clauisc frame width reset to ${BAR_INNER}.` }
+      }
+      const n = Number(value)
+      if (!Number.isInteger(n) || n < MIN_INNER || n > MAX_INNER) {
+        return { text: `Clauisc: width must be a whole number from ${MIN_INNER} to ${MAX_INNER}.` }
+      }
+      await $.store.set('width', n)
+      await update($, width, () => n)
+      return { text: `Clauisc frame width set to ${n}.` }
+    }
     if (arg === 'status') {
       await poll($)
       return { text: await statusReport($) }
@@ -207,7 +233,7 @@ export const register: Register = on => {
     const status = t.isPlaying ? '▶' : '⏸'
     // The boombox body: top edge, a side each way and the rounded bottom. Inside,
     // left to right: the title/artist stack, the notes in the middle, the ring.
-    const inner = Math.min(BAR_INNER, cols - 3)
+    const inner = Math.min((await read($, width)) ?? BAR_INNER, cols - 3)
     const notesAt = Math.floor((inner - NOTES_COLS) / 2)
     const textCols = notesAt - TEXT_PAD - GAP
     const ringGap = inner - notesAt - NOTES_COLS - RING_COLS - GAP

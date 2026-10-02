@@ -109,6 +109,33 @@ describe('clauisc', () => {
     await ui.unmount()
   })
 
+  test('/clauisc width resizes the frame live and remembers it', async ($, on) => {
+    on('process.run', async () => ({
+      value: { exitCode: 0, stdout: INFO, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+    }))
+    const clock = mock.clock(on)
+    mock.store(on, { width: 44 })
+    on('command.register', async (_, e) => ({ value: { command: e.name } }))
+    on('session.start', async (_, e) => ({ cwd: e.cwd }))
+    on('ui.blit', async () => ({}))
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    await clock.advance(10)
+    const run = async (args: string) => JSON.stringify(await $.command.run({ command: 'clauisc', args } as never))
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
+    const top = async () => (await ui.find({ type: 'Text', text: /^ _+$/ }))?.text.length
+
+    // A width saved in an earlier session is back.
+    expect(await top()).toBe(45)
+    expect(await run('width 40')).toMatch(/set to 40/)
+    expect(await top()).toBe(41)
+    expect(await run('width')).toMatch(/width: 40 \(default 48\)/)
+    expect(await run('width 5')).toMatch(/whole number from 29 to 200/)
+    expect(await top()).toBe(41)
+    expect(await run('width reset')).toMatch(/reset to 48/)
+    expect(await top()).toBe(49)
+    await ui.unmount()
+  })
+
   test('picks bright note colors', async () => {
     expect(noteColor(0)).toBe(0xff0000)
     expect(noteColor(1 / 3)).toBe(0x00ff00)
