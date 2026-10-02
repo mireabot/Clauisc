@@ -7,8 +7,8 @@ boombox.
 
 ```
  ____________________________________________
-|               Landline               ⢀⡤⠶⢤⡀ |   ♪
-|                binki                 ⢾   ⡷ | ♫
+| Landline                             ⢀⡤⠶⢤⡀ |   ♪
+| binki                                ⢾   ⡷ | ♫
 |                                      ⠈⠓⠶⠚⠁ |    ♪
 `--------------------------------------------'
 ```
@@ -18,7 +18,8 @@ boombox.
 
 ## Features
 
-- **Title and artist**, stacked and centered, with room for long titles.
+- **Title and artist**, stacked and left-aligned at the frame's left edge,
+  in a fixed-width column with room for long titles.
 - **Progress ring**: a 9-dot circle in braille that fills clockwise from the
   top as the track plays; accent-colored while playing, gray while paused.
 - **Rising notes**: on every beat a ♪ or ♫ in a random color starts at the
@@ -125,7 +126,8 @@ drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 | Name | What it controls |
 | --- | --- |
 | `GAP` | Columns between components |
-| `TEXT_MAX` | Widest the centered title/artist stack gets |
+| `TEXT_PAD` | Columns left of the title/artist stack |
+| `TEXT_MAX` | Width of the title/artist column, the spacer that sets the frame's width |
 | `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
 | `noteColor` | How each note's color is picked |
 | `riseNotes` | How notes start and rise |

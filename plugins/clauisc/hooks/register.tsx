@@ -31,7 +31,9 @@ const INFO_TIMEOUT_MS = 60000
 
 // Spacing in terminal columns (a column is about 8-9 px wide).
 const GAP = 1 // between components
-const TEXT_MAX = 36 // widest the centered title/artist stack gets
+const TEXT_PAD = 1 // left of the title/artist stack, inside the frame
+// The title/artist stack is a spacer this wide: it pushes the ring to the right.
+const TEXT_MAX = 36
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
@@ -204,7 +206,7 @@ export const register: Register = on => {
 
     const status = t.isPlaying ? '▶' : '⏸'
     // The boombox body: top edge, a side each way and the rounded bottom, then the notes.
-    const fixed = 2 + GAP + GAP + RING_COLS + GAP + GAP + NOTES_COLS
+    const fixed = 2 + TEXT_PAD + GAP + RING_COLS + GAP + GAP + NOTES_COLS
     const textCols = Math.min(TEXT_MAX, cols - fixed - 1)
     const hasFrame = e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10
     live.hasFrame = hasFrame
@@ -223,7 +225,7 @@ export const register: Register = on => {
 
     live.bandId = e.requestId
     const { Box, Text, Raster } = $.ui.resolve(e)
-    const inner = GAP + textCols + GAP + RING_COLS + GAP
+    const inner = TEXT_PAD + textCols + GAP + RING_COLS + GAP
     const ring = ringCells(progress(t, await $.clock.now()), t.isPlaying)
     const side = (
       <Box flexDirection="column">
@@ -242,10 +244,10 @@ export const register: Register = on => {
             <Box
               flexDirection="column"
               justifyContent="center"
-              alignItems="center"
+              alignItems="flex-start"
               width={textCols}
               height={BAND_ROWS}
-              marginLeft={GAP}
+              marginLeft={TEXT_PAD}
             >
               <Text bold wrap="truncate-end">{t.name}</Text>
               {t.artist ? <Text dimColor wrap="truncate-end">{t.artist}</Text> : null}

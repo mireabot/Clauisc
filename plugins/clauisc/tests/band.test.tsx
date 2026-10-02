@@ -59,7 +59,7 @@ describe('clauisc', () => {
     expect(beatMs(0, 0)).toBe(380)
   })
 
-  test('draws the boombox frame with the centered title stack, ring and notes', async ($, on) => {
+  test('draws the boombox frame with the left-aligned title stack, ring and notes', async ($, on) => {
     const ran = (stdout: string) => ({
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
