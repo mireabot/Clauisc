@@ -16,6 +16,10 @@ describe('clauisc', () => {
     const t = parseInfo(INFO)
     expect(t).toMatchObject({ isPlaying: true, id: 'ABC123', name: 'Pink + White', bpm: 160, position: 61.5, duration: 184.5 })
     expect(parseInfo('stopped\n')).toBe(null)
+    const empty = ['paused', 'missing value', 'missing value', 'missing value', 'missing value', '0', '0', '0'].join(SEP)
+    expect(parseInfo(empty)).toBe(null)
+    const noAlbum = ['playing', 'X1', 'Song', 'Artist', 'missing value', 'missing value', '3', '200'].join(SEP)
+    expect(parseInfo(noAlbum)).toMatchObject({ name: 'Song', album: '', bpm: 0 })
   })
 
   test('names no AppleScript variable after a reserved word', async () => {

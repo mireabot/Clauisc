@@ -110,13 +110,21 @@ const num = (s: string | undefined) => {
 }
 
 export function parseInfo(stdout: string): Track | null {
-  const f = stdout.replace(/\n$/, '').split(SEP)
+  // AppleScript spells an absent value "missing value" when it joins text.
+  const f = stdout
+    .replace(/\n$/, '')
+    .split(SEP)
+    .map(field => (field.trim() === 'missing value' ? '' : field))
   if (f.length < 8 || (f[0] !== 'playing' && f[0] !== 'paused')) return null
+  const name = f[2] ?? ''
+  const artist = f[3] ?? ''
+  // Paused with nothing loaded: Music names no track, so there is nothing to show.
+  if (!name && !artist) return null
   return {
     isPlaying: f[0] === 'playing',
-    id: f[1] || `${f[2]}|${f[3]}`,
-    name: f[2] || 'Unknown track',
-    artist: f[3] ?? '',
+    id: f[1] || `${name}|${artist}`,
+    name: name || 'Unknown track',
+    artist,
     album: f[4] ?? '',
     bpm: num(f[5]),
     position: num(f[6]),
