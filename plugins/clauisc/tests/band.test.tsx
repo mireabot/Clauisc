@@ -59,7 +59,7 @@ describe('clauisc', () => {
     expect(beatMs(0, 0)).toBe(380)
   })
 
-  test('draws the boombox frame with the left-aligned title stack, ring and notes', async ($, on) => {
+  test('draws the boombox frame: title stack, notes in the middle, then the ring', async ($, on) => {
     const ran = (stdout: string) => ({
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
@@ -86,6 +86,17 @@ describe('clauisc', () => {
     expect(await ui.find({ key: 'notes' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^ _+$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^`-+'$/ })).toBeDefined()
+    // Inside the frame, left to right: title stack, notes, ring; same total width as before.
+    const keys: string[] = []
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== 'object') return
+      const el = node as { type?: string; props?: { key?: string }; children?: unknown[] }
+      if (el.type === 'Raster' && el.props?.key) keys.push(el.props.key)
+      for (const child of el.children ?? []) walk(child)
+    }
+    walk(await ui.drawn())
+    expect(keys).toEqual(['notes', 'ring'])
+    expect((await ui.find({ type: 'Text', text: /^ _+$/ }))?.text.length).toBe(51)
 
     // Notes rise and the ring advances on the beat while playing.
     await clock.advance(2000)

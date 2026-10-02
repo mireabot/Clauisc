@@ -32,8 +32,8 @@ const INFO_TIMEOUT_MS = 60000
 // Spacing in terminal columns (a column is about 8-9 px wide).
 const GAP = 1 // between components
 const TEXT_PAD = 1 // left of the title/artist stack, inside the frame
-// The title/artist stack is a spacer this wide: it pushes the ring to the right.
-const TEXT_MAX = 36
+// Inside width of the boombox frame; the notes sit in its middle.
+const BAR_INNER = 50
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
 const live = {
@@ -205,10 +205,14 @@ export const register: Register = on => {
     }
 
     const status = t.isPlaying ? '▶' : '⏸'
-    // The boombox body: top edge, a side each way and the rounded bottom, then the notes.
-    const fixed = 2 + TEXT_PAD + GAP + RING_COLS + GAP + GAP + NOTES_COLS
-    const textCols = Math.min(TEXT_MAX, cols - fixed - 1)
-    const hasFrame = e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10
+    // The boombox body: top edge, a side each way and the rounded bottom. Inside,
+    // left to right: the title/artist stack, the notes in the middle, the ring.
+    const inner = Math.min(BAR_INNER, cols - 3)
+    const notesAt = Math.floor((inner - NOTES_COLS) / 2)
+    const textCols = notesAt - TEXT_PAD - GAP
+    const ringGap = inner - notesAt - NOTES_COLS - RING_COLS - GAP
+    const hasFrame =
+      e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10 && ringGap >= GAP
     live.hasFrame = hasFrame
 
     if (!hasFrame) {
@@ -225,7 +229,6 @@ export const register: Register = on => {
 
     live.bandId = e.requestId
     const { Box, Text, Raster } = $.ui.resolve(e)
-    const inner = TEXT_PAD + textCols + GAP + RING_COLS + GAP
     const ring = ringCells(progress(t, await $.clock.now()), t.isPlaying)
     const side = (
       <Box flexDirection="column">
@@ -252,15 +255,15 @@ export const register: Register = on => {
               <Text bold wrap="truncate-end">{t.name}</Text>
               {t.artist ? <Text dimColor wrap="truncate-end">{t.artist}</Text> : null}
             </Box>
-            <Box marginLeft={GAP} marginRight={GAP}>
+            <Box marginLeft={GAP}>
+              <Raster key="notes" columns={NOTES_COLS} rows={BAND_ROWS} cells={notesCells(live.notes)} />
+            </Box>
+            <Box marginLeft={ringGap} marginRight={GAP}>
               <Raster key="ring" columns={RING_COLS} rows={BAND_ROWS} cells={ring} />
             </Box>
             {side}
           </Box>
           <Text dimColor>{`\`${'-'.repeat(inner)}'`}</Text>
-        </Box>
-        <Box marginLeft={GAP} marginTop={1}>
-          <Raster key="notes" columns={NOTES_COLS} rows={BAND_ROWS} cells={notesCells(live.notes)} />
         </Box>
       </Box>
     )

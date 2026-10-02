@@ -6,11 +6,11 @@ progress ring, and music notes rising to the beat, framed like a little
 boombox.
 
 ```
- ____________________________________________
-| Landline                             ⢀⡤⠶⢤⡀ |   ♪
-| binki                                ⢾   ⡷ | ♫
-|                                      ⠈⠓⠶⠚⠁ |    ♪
-`--------------------------------------------'
+ __________________________________________________
+| Landline               ♪                   ⢀⡤⠶⢤⡀ |
+| binki                ♫                     ⢾   ⡷ |
+|                         ♪                  ⠈⠓⠶⠚⠁ |
+`--------------------------------------------------'
 ```
 
 > **Status: early.** Tested against a mocked Music app and on macOS 26. Reports and screenshots are welcome in
@@ -18,12 +18,12 @@ boombox.
 
 ## Features
 
-- **Title and artist**, stacked and left-aligned at the frame's left edge,
-  in a fixed-width column with room for long titles.
+- **Title and artist**, stacked and left-aligned at the frame's left edge.
 - **Progress ring**: a 9-dot circle in braille that fills clockwise from the
   top as the track plays; accent-colored while playing, gray while paused.
-- **Rising notes**: on every beat a ♪ or ♫ in a random color starts at the
-  bottom of its own 5×3 frame and floats up a row per beat. The beat follows
+- **Rising notes**: in the middle of the frame, on every beat a ♪ or ♫ in a
+  random color starts at the bottom of a 5×3 area and floats up a row per
+  beat. The beat follows
   the track's BPM when Apple Music has one, a loose random groove otherwise.
   Paused, the last notes drift away.
 - **Two-way sync**: play, pause, skip or scrub in Music and the band follows
@@ -98,7 +98,7 @@ found.
   see why.
 - **Check Music directly**:
   `osascript -e 'tell application "Music" to get name of current track'`
-- **Small window or the desktop app**: the band needs 5 rows and about 30
+- **Small window or the desktop app**: the band needs 5 rows and about 32
   columns, and only the terminal draws the ring and notes; otherwise it's
   one line of text.
 
@@ -127,7 +127,7 @@ drawing in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 | --- | --- |
 | `GAP` | Columns between components |
 | `TEXT_PAD` | Columns left of the title/artist stack |
-| `TEXT_MAX` | Width of the title/artist column, the spacer that sets the frame's width |
+| `BAR_INNER` | Inside width of the frame; the notes sit in its middle and the title stack fills the space to their left |
 | `RING_COLS`, `NOTES_COLS`, `BAND_ROWS` | Component sizes |
 | `noteColor` | How each note's color is picked |
 | `riseNotes` | How notes start and rise |
