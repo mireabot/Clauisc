@@ -11,7 +11,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 12, bodyColumns: 100, scroll: { offset: 0, bodyRows: 12 } },
 } as const
 
-describe('now-playing', () => {
+describe('clauisc', () => {
   test('parses the AppleScript line, comma decimals included', async () => {
     const t = parseInfo(INFO)
     expect(t).toMatchObject({ isPlaying: true, id: 'ABC123', name: 'Pink + White', bpm: 160, position: 61.5, duration: 184.5 })
@@ -45,7 +45,7 @@ describe('now-playing', () => {
     await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
     await clock.advance(10)
 
-    const ui = await $.ui.mount({ plugin: 'now-playing', surface: 'terminal', ...BAND })
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'Frank Ocean' })).toBeDefined()
     expect(await ui.find({ key: 'cover' })).toBeDefined()
@@ -79,7 +79,7 @@ describe('now-playing', () => {
     await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
     await clock.advance(10)
 
-    const ui = await $.ui.mount({ plugin: 'now-playing', surface: 'terminal', ...BAND })
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
     expect(await ui.find({ key: 'cover' })).toBeDefined()
     expect(await ui.drawn()).toMatchObject({ type: 'Box' })
     await ui.unmount()

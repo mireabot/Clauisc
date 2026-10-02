@@ -18,12 +18,12 @@ import {
   progressBar,
 } from './lib'
 
-const track = atom({ plugin: 'now-playing', key: 'track' } as const, null)
-const art = atom({ plugin: 'now-playing', key: 'art' } as const, null)
-const isHidden = atom({ plugin: 'now-playing', key: 'isHidden' } as const, false)
-const style = atom({ plugin: 'now-playing', key: 'style' } as const, 'blocks')
+const track = atom({ plugin: 'clauisc', key: 'track' } as const, null)
+const art = atom({ plugin: 'clauisc', key: 'art' } as const, null)
+const isHidden = atom({ plugin: 'clauisc', key: 'isHidden' } as const, false)
+const style = atom({ plugin: 'clauisc', key: 'style' } as const, 'blocks')
 
-const ART_FILE = '/tmp/claude-now-playing-art'
+const ART_FILE = '/tmp/clauisc-art'
 const POLL_MS = 2000
 
 // Module state for polling and the animation only; what the band draws lives in $.state.

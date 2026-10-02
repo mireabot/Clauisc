@@ -1,6 +1,6 @@
 # Clauisc
 
-**now-playing**: a Claude Code mod that shows what Apple Music is playing, on the right side
+A Claude Code mod that shows what Apple Music is playing, on the right side
 of the band above your prompt:
 
 ```
@@ -40,7 +40,7 @@ Then either:
 **One session**
 
 ```sh
-claude --plugin-dir ~/Clauisc/plugins/now-playing
+claude --plugin-dir ~/Clauisc/plugins/clauisc
 ```
 
 **Every session**
@@ -64,7 +64,7 @@ files change.
 
 ## Customizing
 
-All drawing lives in [`plugins/now-playing/hooks/lib.ts`](plugins/now-playing/hooks/lib.ts):
+All drawing lives in [`plugins/clauisc/hooks/lib.ts`](plugins/clauisc/hooks/lib.ts):
 
 - `HEAD`, `BODY`, `LEGS`: the plush sprite, one character per pixel
   (`.` transparent, keys of `PALETTE` for colors).
@@ -75,7 +75,7 @@ All drawing lives in [`plugins/now-playing/hooks/lib.ts`](plugins/now-playing/ho
 ## Development
 
 ```sh
-cd plugins/now-playing
+cd plugins/clauisc
 claude plugin validate .
 claude plugin test .
 ```
@@ -88,7 +88,7 @@ to see why a hook was skipped.
 - Artwork for some Apple Music streaming and radio tracks is not exposed to
   AppleScript; those show a placeholder cover.
 - Most tracks have no BPM tag, so the plush usually bops at random.
-- Artwork is written to `/tmp/claude-now-playing-art` while it is sampled.
+- Artwork is written to `/tmp/clauisc-art` while it is sampled.
 
 ## License
 

@@ -13,7 +13,7 @@ export type ArtStyle = 'blocks' | 'ascii'
 
 declare module 'claude-code' {
   interface PluginState {
-    'now-playing': {
+    'clauisc': {
       track: Track | null
       art: string | null
       isHidden: boolean

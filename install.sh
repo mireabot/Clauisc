@@ -1,16 +1,16 @@
 #!/bin/sh
-# Loads now-playing into every Claude Code session on this Mac by adding the
+# Loads Clauisc into every Claude Code session on this Mac by adding the
 # plugin folder to CLAUDE_CODE_PLUGIN_DIRS in ~/.claude/settings.json.
 # Usage: ./install.sh          (install)
 #        ./install.sh --remove (uninstall)
 set -eu
 
 if [ "$(uname)" != "Darwin" ]; then
-  echo "now-playing reads Apple Music through osascript, so it needs macOS." >&2
+  echo "Clauisc reads Apple Music through osascript, so it needs macOS." >&2
   exit 1
 fi
 
-PLUGIN_DIR="$(cd "$(dirname "$0")/plugins/now-playing" && pwd)"
+PLUGIN_DIR="$(cd "$(dirname "$0")/plugins/clauisc" && pwd)"
 SETTINGS="$HOME/.claude/settings.json"
 MODE="${1:-install}"
 
@@ -40,7 +40,7 @@ function run(argv) {
 JXA
 
 if [ "$MODE" = "--remove" ]; then
-  echo "Removed now-playing from $SETTINGS (backup: $SETTINGS.bak)."
+  echo "Removed Clauisc from $SETTINGS (backup: $SETTINGS.bak)."
   exit 0
 fi
 
