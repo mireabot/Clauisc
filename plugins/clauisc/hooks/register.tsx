@@ -8,6 +8,7 @@ import {
   BAND_ROWS,
   COVER_COLS,
   INFO_SCRIPT,
+  NOW_SCRIPT,
   NOTES_COLS,
   RING_COLS,
   SAMPLE_SCRIPT,
@@ -17,6 +18,7 @@ import {
   isPixels,
   notesCells,
   parseInfo,
+  parseNowPlaying,
   riseNotes,
   ringCells,
 } from './lib'
@@ -46,6 +48,8 @@ const live = {
   current: null as Track | null,
   polledAt: 0,
   artFor: null as string | null,
+  artworkId: '',
+  source: 'none yet',
   notes: [] as FloatingNote[],
   bandId: null as string | null,
   hasFrame: false,
@@ -59,6 +63,9 @@ const live = {
   renders: 0,
   surface: null as string | null,
   lastExit: null as number | null,
+  nowPlayingExit: null as number | null,
+  nowPlayingStdout: '',
+  nowPlayingStderr: '',
   lastStdout: '',
   lastStderr: '',
   lastError: null as string | null,
@@ -87,27 +94,65 @@ async function loadArt($: EngineInterface, id: string) {
   if (live.artFor === id) await update($, art, () => pixels)
 }
 
+/** System Now Playing first: it describes streamed songs that Music's AppleScript cannot. */
+async function pollNowPlaying($: EngineInterface): Promise<boolean> {
+  const ran = await $.process.run(
+    [OSASCRIPT, '-l', 'JavaScript', '-e', NOW_SCRIPT, live.artworkId, String(ART_PX)],
+    { timeoutMs: INFO_TIMEOUT_MS },
+  )
+  live.nowPlayingExit = ran.exitCode
+  live.nowPlayingStdout = ran.stdout.replace(/"pixels":"[0-9a-f]+"/, '"pixels":"…"').trim().slice(0, 300)
+  live.nowPlayingStderr = ran.stderr.trim().slice(0, 300)
+  const found = ran.exitCode === 0 ? parseNowPlaying(ran.stdout) : null
+  if (!found) return false
+
+  live.source = 'system Now Playing'
+  live.current = found.track
+  await update($, problem, () => null)
+  await update($, track, () => found.track)
+  if (found.track && found.artworkId && found.artworkId !== live.artworkId) {
+    // New artwork: drawn once per artwork id, whether or not its image could be read.
+    live.artworkId = found.artworkId
+    live.artFor = found.track.id
+    if (found.pixels) {
+      live.artStatus = `loaded from Now Playing (${found.artworkSource})`
+      await update($, art, () => found.pixels)
+    } else {
+      live.artStatus = `Now Playing gave no image (tried ${found.artworkSource ?? 'nothing'}); trying Music`
+      await update($, art, () => null)
+      await loadArt($, found.track.id)
+    }
+  }
+  return true
+}
+
+/** Music's own AppleScript: the fallback when Now Playing is unreadable. */
+async function pollMusic($: EngineInterface) {
+  const ran = await $.process.run([OSASCRIPT, '-e', INFO_SCRIPT], { timeoutMs: INFO_TIMEOUT_MS })
+  live.source = 'Music AppleScript'
+  live.lastExit = ran.exitCode
+  live.lastStdout = ran.stdout.trim().slice(0, 300)
+  live.lastStderr = ran.stderr.trim().slice(0, 300)
+  const now = ran.exitCode === 0 ? parseInfo(ran.stdout) : null
+  live.current = now
+  await update($, problem, () => (ran.exitCode === 0 ? null : explainFailure(ran.stderr)))
+  await update($, track, () => now)
+  if (now && now.id !== live.artFor) {
+    live.artFor = now.id
+    await update($, art, () => null)
+    await loadArt($, now.id)
+  }
+  if (!now) live.artFor = null
+}
+
 async function poll($: EngineInterface) {
   if (live.isPolling) return
   live.isPolling = true
   live.polls += 1
   try {
-    const ran = await $.process.run([OSASCRIPT, '-e', INFO_SCRIPT], { timeoutMs: INFO_TIMEOUT_MS })
+    if (!(await pollNowPlaying($))) await pollMusic($)
     live.polledAt = await $.clock.now()
-    live.lastExit = ran.exitCode
-    live.lastStdout = ran.stdout.trim().slice(0, 300)
-    live.lastStderr = ran.stderr.trim().slice(0, 300)
     live.lastError = null
-    const now = ran.exitCode === 0 ? parseInfo(ran.stdout) : null
-    live.current = now
-    await update($, problem, () => (ran.exitCode === 0 ? null : explainFailure(ran.stderr)))
-    await update($, track, () => now)
-    if (now && now.id !== live.artFor) {
-      live.artFor = now.id
-      await update($, art, () => null)
-      await loadArt($, now.id)
-    }
-    if (!now) live.artFor = null
   } catch (error) {
     // osascript could not start or ran past the timeout: say so and keep trying.
     live.polledAt = await $.clock.now()
@@ -123,10 +168,11 @@ async function statusReport($: EngineInterface): Promise<string> {
   const age = live.polledAt ? Math.round(((await $.clock.now()) - live.polledAt) / 1000) : null
   return [
     'Clauisc status',
+    `- source: ${live.source}`,
     `- polls: ${live.polls} (timer ticks ${live.ticks}, beats ${live.beats}, backup polls ${live.watchdogPolls}), last ${age === null ? 'never' : `${age}s ago`}`,
-    `- last osascript exit: ${live.lastExit ?? 'none yet'}, last error: ${live.lastError ?? 'none'}`,
-    `- stdout: ${JSON.stringify(live.lastStdout)}`,
-    `- stderr: ${JSON.stringify(live.lastStderr)}`,
+    `- last error: ${live.lastError ?? 'none'}`,
+    `- Now Playing: exit ${live.nowPlayingExit ?? 'not run'}, stdout ${JSON.stringify(live.nowPlayingStdout)}, stderr ${JSON.stringify(live.nowPlayingStderr)}`,
+    `- Music AppleScript: exit ${live.lastExit ?? 'not run'}, stdout ${JSON.stringify(live.lastStdout)}, stderr ${JSON.stringify(live.lastStderr)}`,
     `- track: ${t ? `${t.isPlaying ? 'playing' : 'paused'} "${t.name}" by ${t.artist || 'unknown'} at ${Math.round(t.position)}/${Math.round(t.duration)}s (bpm ${t.bpm})` : 'none'}`,
     `- artwork: ${live.artStatus}`,
     `- band drawn: ${live.renders} times, surface ${live.surface ?? 'never asked'}`,

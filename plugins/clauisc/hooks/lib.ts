@@ -90,13 +90,9 @@ on run argv
 end run
 `
 
-/** JXA scaling an image file to W x H and printing its pixels as hex RGB. */
-export const SAMPLE_SCRIPT = `
-ObjC.import('AppKit');
-function run(argv) {
-  var W = parseInt(argv[1]), H = parseInt(argv[2]);
-  var img = $.NSImage.alloc.initWithContentsOfFile(argv[0]);
-  if (img.isNil()) return '';
+// JXA that scales an NSImage to W x H and returns its pixels as hex RGB.
+const PIXELS_JS = `
+function pixels(img, W, H) {
   var rep = $.NSBitmapImageRep.alloc.initWithBitmapDataPlanesPixelsWidePixelsHighBitsPerSampleSamplesPerPixelHasAlphaIsPlanarColorSpaceNameBytesPerRowBitsPerPixel(null, W, H, 8, 4, true, false, $.NSDeviceRGBColorSpace, 0, 0);
   $.NSGraphicsContext.saveGraphicsState;
   var ctx = $.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep);
@@ -113,6 +109,71 @@ function run(argv) {
     });
   }
   return out;
+}
+`
+
+/** JXA scaling an image file to W x H and printing its pixels as hex RGB. */
+export const SAMPLE_SCRIPT = `
+ObjC.import('AppKit');
+${PIXELS_JS}
+function run(argv) {
+  var img = $.NSImage.alloc.initWithContentsOfFile(argv[0]);
+  if (img.isNil()) return '';
+  return pixels(img, parseInt(argv[1]), parseInt(argv[2]));
+}
+`
+
+/**
+ * JXA reading macOS's system Now Playing info (what Control Center shows),
+ * which also describes streamed Apple Music songs that Music's AppleScript
+ * cannot. argv: the artwork id already drawn, then the pixel size. Prints
+ * JSON (NowPlaying); `pixels` only when the artwork changed and could be read.
+ */
+export const NOW_SCRIPT = `
+ObjC.import('AppKit');
+${PIXELS_JS}
+function run(argv) {
+  var drawnArtwork = argv[0] || '', size = parseInt(argv[1]);
+  $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
+  var request = $.NSClassFromString('MRNowPlayingRequest');
+  if (request.isNil()) return JSON.stringify({ error: 'MRNowPlayingRequest is unavailable' });
+  var item = request.localNowPlayingItem;
+  if (item.isNil()) return JSON.stringify({ state: 'stopped' });
+  var info = item.nowPlayingInfo;
+  if (info.isNil()) return JSON.stringify({ state: 'stopped' });
+  function raw(key) { return info.objectForKey('kMRMediaRemoteNowPlayingInfo' + key); }
+  function get(key) { var value = raw(key); return value.isNil() ? null : ObjC.unwrap(value); }
+  var rate = Number(get('PlaybackRate') || 0);
+  var elapsed = Number(get('ElapsedTime') || 0);
+  var stamp = raw('Timestamp');
+  var since = stamp.isNil() ? 0 : -stamp.timeIntervalSinceNow;
+  var out = {
+    state: rate > 0 ? 'playing' : 'paused',
+    id: String(get('UniqueIdentifier') || get('ContentItemIdentifier') || ''),
+    title: get('Title') || '',
+    artist: get('Artist') || '',
+    album: get('Album') || '',
+    position: elapsed + rate * since,
+    duration: Number(get('Duration') || 0),
+    artworkId: String(get('ArtworkIdentifier') || ''),
+  };
+  if (out.artworkId && out.artworkId !== drawnArtwork) {
+    var data = null, source = 'none';
+    try {
+      var artwork = item.artwork;
+      if (!artwork.isNil() && !artwork.imageData.isNil()) { data = artwork.imageData; source = 'item.artwork'; }
+    } catch (e) {}
+    if (!data) {
+      var inline = raw('ArtworkData');
+      if (!inline.isNil()) { data = inline; source = 'ArtworkData'; }
+    }
+    out.artworkSource = source;
+    if (data) {
+      var img = $.NSImage.alloc.initWithData(data);
+      if (!img.isNil()) out.pixels = pixels(img, size, size);
+    }
+  }
+  return JSON.stringify(out);
 }
 `
 
@@ -154,6 +215,51 @@ export function parseInfo(stdout: string): Track | null {
     bpm: num(f[5]),
     position: num(f[6]),
     duration: num(f[7]),
+  }
+}
+
+/** What NOW_SCRIPT reports, parsed: the track, its artwork id, and pixels when read. */
+export type NowPlaying = {
+  track: Track | null
+  artworkId: string
+  artworkSource: string | null
+  pixels: string | null
+}
+
+/**
+ * NOW_SCRIPT's JSON as a track; null when it is not Now Playing JSON at all
+ * (the caller then falls back to Music's AppleScript).
+ */
+export function parseNowPlaying(stdout: string): NowPlaying | null {
+  let raw: Record<string, unknown>
+  try {
+    raw = JSON.parse(stdout.trim()) as Record<string, unknown>
+  } catch {
+    return null
+  }
+  if (typeof raw !== 'object' || raw === null || typeof raw.error === 'string') return null
+  const text = (key: string) => (typeof raw[key] === 'string' ? (raw[key] as string) : '')
+  const number = (key: string) => (typeof raw[key] === 'number' && Number.isFinite(raw[key]) ? (raw[key] as number) : 0)
+  const state = text('state')
+  const name = text('title')
+  const artist = text('artist')
+  const hasTrack = (state === 'playing' || state === 'paused') && (name !== '' || artist !== '')
+  return {
+    track: hasTrack
+      ? {
+          isPlaying: state === 'playing',
+          id: text('id') || `${name}|${artist}`,
+          name: name || 'Unknown track',
+          artist,
+          album: text('album'),
+          bpm: 0,
+          position: number('position'),
+          duration: number('duration'),
+        }
+      : null,
+    artworkId: text('artworkId'),
+    artworkSource: text('artworkSource') || null,
+    pixels: isPixels(text('pixels')) ? text('pixels') : null,
   }
 }
 

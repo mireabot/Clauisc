@@ -13,6 +13,7 @@ import {
   noteColor,
   notesCells,
   parseInfo,
+  parseNowPlaying,
   riseNotes,
   ringCells,
 } from '../hooks/lib'
@@ -238,6 +239,59 @@ describe('clauisc', () => {
     state = 'paused'
     await clock.advance(2500)
     expect(await ringLit()).toBe(false)
+    await ui.unmount()
+  })
+
+  test('reads system Now Playing, as seen on macOS 26 with a streamed song', async () => {
+    const real = JSON.stringify({
+      state: 'playing', id: '7F3A', title: 'Landline', artist: 'binki', album: 'MOTOR FUNCTION - EP',
+      position: 2.463346083, duration: 160.377, artworkId: 'art-1', artworkSource: 'item.artwork', pixels: HEX,
+    })
+    expect(parseNowPlaying(real)).toEqual({
+      track: {
+        isPlaying: true, id: '7F3A', name: 'Landline', artist: 'binki', album: 'MOTOR FUNCTION - EP',
+        bpm: 0, position: 2.463346083, duration: 160.377,
+      },
+      artworkId: 'art-1',
+      artworkSource: 'item.artwork',
+      pixels: HEX,
+    })
+    expect(parseNowPlaying(JSON.stringify({ state: 'paused', title: 'Landline', artist: 'binki' }))?.track?.isPlaying).toBe(false)
+    expect(parseNowPlaying(JSON.stringify({ state: 'stopped' }))).toMatchObject({ track: null })
+    expect(parseNowPlaying(JSON.stringify({ error: 'MRNowPlayingRequest is unavailable' }))).toBe(null)
+    expect(parseNowPlaying('playing\u001f...')).toBe(null)
+  })
+
+  test('draws the band from Now Playing, and falls back to Music when it is unreadable', async ($, on) => {
+    let nowPlayingWorks = true
+    on('process.run', async ($, e) => {
+      const script = e.argv[e.argv.indexOf('-e') + 1] ?? ''
+      const stdout = script.includes('MRNowPlayingRequest')
+        ? nowPlayingWorks
+          ? JSON.stringify({ state: 'playing', id: '7F3A', title: 'Landline', artist: 'binki', album: 'EP', position: 3, duration: 160, artworkId: 'a1', artworkSource: 'item.artwork', pixels: HEX })
+          : JSON.stringify({ error: 'MRNowPlayingRequest is unavailable' })
+        : script.includes('raw data')
+          ? 'none\n'
+          : INFO
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    const clock = mock.clock(on)
+    on('command.register', async (_, e) => ({ value: { command: e.name } }))
+    on('session.start', async (_, e) => ({ cwd: e.cwd }))
+    on('ui.blit', async () => ({}))
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    await clock.advance(10)
+
+    const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
+    expect(await ui.find({ type: 'Text', text: 'Landline' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'binki' })).toBeDefined()
+    const report = JSON.stringify(await $.command.run({ command: 'nowplaying', args: 'status' } as never))
+    expect(report).toMatch(/source: system Now Playing/)
+    expect(report).toMatch(/loaded from Now Playing \(item.artwork\)/)
+
+    nowPlayingWorks = false
+    await clock.advance(2500)
+    expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
     await ui.unmount()
   })
 

@@ -13,8 +13,7 @@ a little boombox.
 `-----------------------------------------'
 ```
 
-> **Status: early.** Tested against a mocked Music app and on a first real
-> Mac. Reports and screenshots are welcome in
+> **Status: early.** Tested against a mocked Music app and on macOS 26. Reports and screenshots are welcome in
 > [Issues](https://github.com/mireabot/Clauisc/issues).
 
 ## Features
@@ -31,6 +30,8 @@ a little boombox.
 - **Two-way sync**: play, pause, skip or scrub in Music and the band follows
   within about 2 seconds.
 - **Fits the terminal**: 5 rows tall; in a small window it becomes one line.
+- **Streamed songs too**: reads macOS's system Now Playing info, so streamed
+  Apple Music songs show up, not just your library.
 - **No dependencies**: only macOS's built-in `osascript`.
 
 ## Requirements
@@ -106,13 +107,17 @@ found.
 
 ## How it works
 
-1. **Track**: every 2 seconds an AppleScript asks Music for the player state,
-   title, artist, album, BPM, position and duration. The beat timer doubles
-   as a backup: if the 2-second timer goes quiet, it asks Music itself.
-2. **Artwork**: when the track changes, AppleScript writes the artwork's raw
-   bytes to `/tmp/clauisc-art`. A JavaScript for Automation script loads it
-   with AppKit, scales it to 12×12, and prints each pixel's RGB; Clauisc
-   averages that down to 6×6.
+1. **Track**: every 2 seconds a JavaScript for Automation script reads
+   macOS's system **Now Playing** info, the same data Control Center's media
+   widget shows: title, artist, album, position, duration and artwork. It
+   describes streamed Apple Music songs, which Music's own AppleScript can't
+   on recent macOS. If Now Playing can't be read, Clauisc falls back to
+   asking Music through AppleScript. The beat timer doubles as a backup: if
+   the 2-second timer goes quiet, it checks itself.
+2. **Artwork**: when the artwork changes, the same script scales it to 12×12
+   with AppKit and prints each pixel's RGB; Clauisc averages that down to
+   6×6. If Now Playing has no image, AppleScript asks Music for it and writes
+   it to `/tmp/clauisc-art` first.
 3. **Cover**: each cell holds two pixels, an upper half block `▀` whose
    foreground is the top pixel and background the bottom one, so 6×3 cells
    look square.
@@ -184,9 +189,16 @@ install.sh                        local install for every session
 
 ## Known limits
 
+- Now Playing comes from macOS's private MediaRemote framework. It works on
+  macOS 26 from `osascript`, but Apple has restricted it before and a macOS
+  update could again; Clauisc then falls back to Music's AppleScript, which
+  only sees library songs.
+- Now Playing is system-wide: if another app (a browser, Spotify) is the
+  current player, the band shows that.
+- Now Playing has no BPM, so the notes usually rise on a random groove.
+
 - Some Apple Music streaming and radio tracks don't expose artwork to
   AppleScript; those get a placeholder cover.
-- Most tracks have no BPM tag, so the notes usually rise on a random groove.
 - The cover, ring and notes are terminal only; other Claude Code surfaces
   get one line of text.
 
