@@ -38,6 +38,9 @@ const TEXT_PAD = 1 // left of the title/artist stack, inside the frame
 const BAR_INNER = 48
 // Narrowest frame that still fits a 10-column title stack, the notes and the ring.
 const MIN_INNER = 29
+// Rows inside the frame: one more than the ring and notes, so the two-line
+// title/artist stack sits exactly in the middle.
+const FRAME_ROWS = BAND_ROWS + 1
 const MAX_INNER = 200
 
 // Module state for polling and the animation only; what the band draws lives in $.state.
@@ -238,7 +241,7 @@ export const register: Register = on => {
     const textCols = notesAt - TEXT_PAD - GAP
     const ringGap = inner - notesAt - NOTES_COLS - RING_COLS - GAP
     const hasFrame =
-      e.surface === 'terminal' && e.props.maxRows >= BAND_ROWS + 2 && textCols >= 10 && ringGap >= GAP
+      e.surface === 'terminal' && e.props.maxRows >= FRAME_ROWS + 2 && textCols >= 10 && ringGap >= GAP
     live.hasFrame = hasFrame
 
     if (!hasFrame) {
@@ -258,7 +261,7 @@ export const register: Register = on => {
     const ring = ringCells(progress(t, await $.clock.now()), t.isPlaying)
     const side = (
       <Box flexDirection="column">
-        {Array.from({ length: BAND_ROWS }, () => (
+        {Array.from({ length: FRAME_ROWS }, () => (
           <Text dimColor>|</Text>
         ))}
       </Box>
@@ -268,14 +271,14 @@ export const register: Register = on => {
       <Box flexDirection="row" justifyContent="flex-end" alignItems="flex-start" width={cols}>
         <Box flexDirection="column">
           <Text dimColor>{` ${'_'.repeat(inner)}`}</Text>
-          <Box flexDirection="row">
+          <Box flexDirection="row" alignItems="flex-start">
             {side}
             <Box
               flexDirection="column"
               justifyContent="center"
               alignItems="flex-start"
               width={textCols}
-              height={BAND_ROWS}
+              height={FRAME_ROWS}
               marginLeft={TEXT_PAD}
             >
               <Text bold wrap="truncate-end">{t.name}</Text>

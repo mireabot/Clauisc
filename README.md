@@ -7,9 +7,10 @@ boombox.
 
 ```
  ________________________________________________
-| Landline              ♪                  ⢀⡤⠶⢤⡀ |
-| binki               ♫                    ⢾   ⡷ |
-|                        ♪                 ⠈⠓⠶⠚⠁ |
+|                       ♪                  ⢀⡤⠶⢤⡀ |
+| Landline            ♫                    ⢾   ⡷ |
+| binki                  ♪                 ⠈⠓⠶⠚⠁ |
+|                                                |
 `------------------------------------------------'
 ```
 
@@ -18,7 +19,8 @@ boombox.
 
 ## Features
 
-- **Title and artist**, stacked and left-aligned at the frame's left edge.
+- **Title and artist**, stacked and left-aligned at the frame's left edge,
+  centered top to bottom.
 - **Progress ring**: a 9-dot circle in braille that fills clockwise from the
   top as the track plays; accent-colored while playing, gray while paused.
 - **Rising notes**: in the middle of the frame, on every beat a ♪ or ♫ in a
@@ -28,7 +30,7 @@ boombox.
   Paused, the last notes drift away.
 - **Two-way sync**: play, pause, skip or scrub in Music and the band follows
   within about 2 seconds.
-- **Fits the terminal**: 5 rows tall; in a small window it becomes one line.
+- **Fits the terminal**: 6 rows tall; in a small window it becomes one line.
 - **Streamed songs too**: reads macOS's system Now Playing info, so streamed
   Apple Music songs show up, not just your library.
 - **No dependencies**: only macOS's built-in `osascript`.
@@ -101,7 +103,7 @@ found.
   see why.
 - **Check Music directly**:
   `osascript -e 'tell application "Music" to get name of current track'`
-- **Small window or the desktop app**: the band needs 5 rows and about 32
+- **Small window or the desktop app**: the band needs 6 rows and about 32
   columns, and only the terminal draws the ring and notes; otherwise it's
   one line of text.
 

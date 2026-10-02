@@ -96,6 +96,17 @@ describe('clauisc', () => {
     }
     walk(await ui.drawn())
     expect(keys).toEqual(['notes', 'ring'])
+    // Four rows inside the frame: the two-line stack sits exactly in the middle.
+    const sides = (await ui.drawn()) as unknown
+    const bars: string[] = []
+    const collect = (node: unknown) => {
+      if (!node || typeof node !== 'object') return
+      const el = node as { type?: string; children?: unknown[] }
+      if (el.type === 'Text' && el.children?.length === 1 && el.children[0] === '|') bars.push('|')
+      for (const child of el.children ?? []) collect(child)
+    }
+    collect(sides)
+    expect(bars.length).toBe(8)
     expect((await ui.find({ type: 'Text', text: /^ _+$/ }))?.text.length).toBe(49)
 
     // Notes rise and the ring advances on the beat while playing.
