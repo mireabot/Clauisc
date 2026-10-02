@@ -198,8 +198,6 @@ install.sh                        local install for every session
 
 ## Credits
 
-- The frame's shape is inspired by **VK**'s ASCII boombox
-  ([asciiart.website/art/2612](https://asciiart.website/art/2612)).
 - Clauisc is a fan project, not affiliated with or endorsed by Anthropic.
   Claude is a trademark of Anthropic.
 
