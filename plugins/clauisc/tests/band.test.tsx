@@ -102,8 +102,8 @@ describe('clauisc', () => {
     await clock.advance(2000)
     expect(await ui.find({ key: 'notes' })).toBeDefined()
 
-    // /nowplaying hides the band; the engine's own band shows again.
-    await $.command.run({ command: 'nowplaying', args: '' } as never)
+    // /clauisc hides the band; the engine's own band shows again.
+    await $.command.run({ command: 'clauisc', args: '' } as never)
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: 'engine band' })).toBeDefined()
     await ui.unmount()
@@ -188,7 +188,7 @@ describe('clauisc', () => {
 
     const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
     expect(await ui.find({ type: 'Text', text: 'Pink + White' })).toBeDefined()
-    const report = await $.command.run({ command: 'nowplaying', args: 'status' } as never)
+    const report = await $.command.run({ command: 'clauisc', args: 'status' } as never)
     expect(JSON.stringify(report)).toMatch(/playing \\"Pink \+ White\\"/)
     await ui.unmount()
   })
@@ -262,7 +262,7 @@ describe('clauisc', () => {
     const ui = await $.ui.mount({ plugin: 'clauisc', surface: 'terminal', ...BAND })
     expect(await ui.find({ type: 'Text', text: 'Landline' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'binki' })).toBeDefined()
-    const report = JSON.stringify(await $.command.run({ command: 'nowplaying', args: 'status' } as never))
+    const report = JSON.stringify(await $.command.run({ command: 'clauisc', args: 'status' } as never))
     expect(report).toMatch(/source: system Now Playing/)
 
     nowPlayingWorks = false

@@ -76,12 +76,12 @@ Play something in Music and the band appears above your prompt.
 
 | Command | Effect |
 | --- | --- |
-| `/nowplaying` | Hide or show the band |
-| `/nowplaying status` | Report what Clauisc sees: which source answered, osascript's output, the track, timers, and whether the band was drawn |
+| `/clauisc` | Hide or show the band |
+| `/clauisc status` | Report what Clauisc sees: which source answered, osascript's output, the track, timers, and whether the band was drawn |
 
 ## Troubleshooting
 
-Run `/nowplaying status` first; it checks Music right away and reports what it
+Run `/clauisc status` first; it checks Music right away and reports what it
 found.
 
 - **The band says macOS is blocking access to Music**: open System Settings →
@@ -89,7 +89,7 @@ found.
   and restart the terminal.
 - **No band and no message**: Music isn't open, or nothing is loaded in it.
   Start a track; the band appears within 2 seconds.
-- **The band doesn't follow play/pause**: check `/nowplaying status`. `timer
+- **The band doesn't follow play/pause**: check `/clauisc status`. `timer
   ticks` should climb by about one every 2 seconds; if it doesn't, `backup
   polls` shows the beat timer covering for it.
 - **`band drawn: 0 times`**: Claude Code isn't loading the plugin. Check
@@ -147,7 +147,7 @@ An interactive session watches that folder: save a file and the plugin
 reloads in place (its hooks run again, the band redraws), with no restart.
 If a hook throws or a drawing is refused, the transcript shows one dim line
 naming the hook and the reason; `--debug` writes every occurrence to the
-debug log. `/nowplaying status` shows the plugin's own view at any time.
+debug log. `/clauisc status` shows the plugin's own view at any time.
 
 You can also ask Claude in that same session to change the plugin: edits it
 makes reload when its turn ends.
@@ -170,7 +170,7 @@ Once the plugin has loaded, Claude Code writes its API types to
 .claude-plugin/marketplace.json   marketplace manifest
 plugins/clauisc/
   .claude-plugin/plugin.json      plugin manifest
-  hooks/register.tsx              hooks: polling, beat, band layout, /nowplaying
+  hooks/register.tsx              hooks: polling, beat, band layout, /clauisc
   hooks/lib.ts                    AppleScript/JXA, parsing, ring and notes cells
   types/index.d.ts                state contract
   tests/band.test.tsx             tests

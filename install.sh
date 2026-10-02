@@ -47,4 +47,4 @@ fi
 echo "Added $PLUGIN_DIR to CLAUDE_CODE_PLUGIN_DIRS in $SETTINGS (backup: $SETTINGS.bak)."
 echo "Asking Music once so macOS shows its Automation prompt; click Allow."
 osascript -e 'tell application "Music" to get player state' >/dev/null 2>&1 || true
-echo "Done. Start a new Claude Code session; /nowplaying toggles the band."
+echo "Done. Start a new Claude Code session; /clauisc toggles the band."

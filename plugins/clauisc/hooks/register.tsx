@@ -45,7 +45,7 @@ const live = {
   hasFrame: false,
   isPolling: false,
   poller: null as Timer | null,
-  // Diagnostics for /nowplaying status.
+  // Diagnostics for /clauisc status.
   polls: 0,
   ticks: 0,
   beats: 0,
@@ -160,8 +160,8 @@ function beat($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'nowplaying',
-      description: 'Toggle the Apple Music band; "/nowplaying status" explains what it sees',
+      name: 'clauisc',
+      description: 'Toggle the Apple Music band; "/clauisc status" explains what it sees',
     })
     void poll($)
     live.poller?.cancel()
@@ -174,7 +174,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'nowplaying' }, async ($, e) => {
+  on('command.run', { command: 'clauisc' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     if (arg === 'status') {
       await poll($)
